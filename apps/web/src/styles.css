@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+/*
+ * Design system minimal, volontairement (docs/02 §14 : « On a besoin de
+ * 10 composants, pas de 100 »). Tailwind suffit ; aucune librairie de composants
+ * n'est ajoutée à l'étape 1.
+ */
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+}

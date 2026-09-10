@@ -2,17 +2,21 @@
 
 > ## ⚠️ Statut du dépôt
 >
-> **Ce dépôt ne contient aucune ligne de code produit. C'est volontaire.**
+> **La documentation de conception est la source de vérité** : le produit final, son architecture,
+> son modèle de données, ses pipelines, sa stratégie de tests et son plan en 12 étapes.
 >
-> Il contient **uniquement la documentation de conception** : le produit final, son
-> architecture, son modèle de données, ses pipelines, sa stratégie de tests et son
-> **plan de développement en 12 étapes**.
+> **L'étape 1 est implémentée** (fondations exécutables) : monorepo pnpm, API Fastify, worker,
+> base SQLite migrée, file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic.
+> Elle ne contient **aucune fonctionnalité métier** — c'est volontaire (`docs/10` §4.1).
 >
-> Règle issue du cahier des charges (§46 — Priorité absolue) : *ne pas commencer à coder
-> avant d'avoir l'architecture, le modèle de données, les flux, les responsabilités, les
-> interfaces critiques, les phases, les risques et les décisions techniques.*
+> Règle issue du cahier des charges (§46 — Priorité absolue) : *ne pas commencer à coder avant
+> d'avoir l'architecture, le modèle de données, les flux, les responsabilités, les interfaces
+> critiques, les phases, les risques et les décisions techniques.* La documentation a été écrite
+> avant la première ligne de code, et elle reste la référence : **toute contribution commence par
+> la mise à jour de la documentation**.
 >
-> Toute contribution doit d'abord mettre à jour la documentation, jamais l'inverse.
+> Compte rendu d'exécution de l'étape 1 (décisions prises, ce qui n'a pas été construit, ce qui
+> reste ouvert) : **[docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md)**.
 
 ---
 
@@ -73,6 +77,32 @@ techniquement.
 | [docs/09-tests-et-qualite.md](docs/09-tests-et-qualite.md) | Stratégie de tests (unitaires → e2e, agents, connecteurs, migrations, idempotence) |
 | [docs/10-plan-de-developpement-12-etapes.md](docs/10-plan-de-developpement-12-etapes.md) | **Les 12 étapes de développement** : objectif, livrables, dépendances, critères d'acceptation, tests, risques, complexité |
 | [docs/11-risques-decisions-et-limites.md](docs/11-risques-decisions-et-limites.md) | Risques techniques/produit, compromis, décisions réversibles vs coûteuses, ce qui doit attendre |
+| [docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md) | **Compte rendu d'exécution de l'étape 1** : décisions prises (M1 à M12), ce qui n'a pas été construit, tests, points ouverts |
+
+---
+
+## 3bis. Démarrage rapide (étape 1)
+
+```bash
+pnpm install                  # dépendances (better-sqlite3 compilé localement)
+cp .env.example .env          # puis renseigner les deux clés obligatoires :
+openssl rand -hex 32          #   SESSION_SECRET
+openssl rand -hex 32          #   ENCRYPTION_KEY
+
+pnpm check:env                # état de l'environnement (bloquant ou dégradé)
+pnpm db:migrate               # crée data/app.db et les 13 tables de l'étape 1
+pnpm dev                      # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
+
+pnpm job:noop -- --wait       # sonde de bout en bout : statut, événements, coût calculé
+pnpm verify                   # types, lint, tests, migrations, frontières, canari, environnement
+```
+
+L'écran de diagnostic (`http://127.0.0.1:5173`) affiche : base migrée, worker actif,
+clé IA présente, budget du jour. **C'est tout ce que fait l'étape 1** — aucune
+fonctionnalité métier n'existe encore, par construction (`docs/10` §4.1).
+
+Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg et whisper ne sont **pas** requis à cette
+étape (leur absence est signalée « dégradé », jamais bloquante).
 
 ---
 
@@ -112,7 +142,7 @@ Détail complet et justifications : [docs/02-architecture.md](docs/02-architectu
 
 | Étape | Titre | Palier |
 |---|---|---|
-| 1 | Fondations : monorepo, socle technique, base de données, secrets | **V1** |
+| 1 | Fondations : monorepo, socle technique, base de données, secrets — **implémentée** | **V1** |
 | 2 | Conversation, transcription vocale et mémoire des projets | **V1** |
 | 3 | Orchestrateur IA, abstraction LLM et suivi des coûts | **V1** |
 | 4 | Fiche maître et génération éditoriale multi-plateformes | **V1** |

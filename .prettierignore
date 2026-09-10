@@ -1,0 +1,19 @@
+# Dépendances et sorties
+node_modules/
+dist/
+coverage/
+.pnpm-store/
+
+# Données locales
+data/
+
+# Documentation : rédigée et relue à la main, jamais reformatée automatiquement
+# (11 000 lignes déjà relues ; un reformatage produirait un diff illisible).
+docs/
+README.md
+
+# Migrations générées par drizzle-kit
+packages/database/migrations/
+
+# Journaux locaux
+*.log

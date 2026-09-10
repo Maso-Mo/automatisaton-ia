@@ -1,0 +1,18 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm >= 11 n'exécute **aucun** script d'installation sans autorisation explicite.
+# Deux paquets en ont réellement besoin ici, et aucun autre :
+#   - better-sqlite3 : seul module natif direct du produit (docs/02 §10) ;
+#   - esbuild       : transformateur utilisé par Vite et Vitest.
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+
+# Le délai minimal de publication de pnpm 11 (protection contre les versions
+# compromises) a été levé pour les deux paquets ci-dessous, dont la version
+# épinglée est nécessaire à l'étape 1. Toute autre version respecte le délai.
+minimumReleaseAgeExclude:
+  - lint-staged@17.5.1
+  - zod@4.6.2

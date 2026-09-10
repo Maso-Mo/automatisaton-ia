@@ -1,0 +1,65 @@
+{
+  "name": "automatisation-ia",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plateforme personnelle d'automatisation de contenu assistée par IA — étape 1 : fondations exécutables (docs/10 §4.1)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @aia/api dev",
+    "dev:worker": "pnpm --filter @aia/worker dev",
+    "dev:web": "pnpm --filter @aia/web dev",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --exclude '**/*.live.test.ts'",
+    "test:watch": "vitest",
+    "test:unit": "vitest run packages/",
+    "test:int": "vitest run --dir tests/integration",
+    "test:e2e": "tsx scripts/e2e.ts",
+    "test:live": "vitest run '**/*.live.test.ts' --no-file-parallelism",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:check-migrations": "tsx scripts/db-check-migrations.ts",
+    "check:env": "tsx scripts/check-env.ts",
+    "check:canary": "tsx scripts/check-canary.ts",
+    "check:boundaries": "tsx scripts/check-boundaries.ts",
+    "job:noop": "tsx apps/worker/src/enqueue-noop.ts",
+    "verify": "bash scripts/verify.sh",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@aia/ai": "workspace:*",
+    "@aia/analytics": "workspace:*",
+    "@aia/config": "workspace:*",
+    "@aia/database": "workspace:*",
+    "@aia/observability": "workspace:*",
+    "@aia/queue": "workspace:*",
+    "@aia/shared": "workspace:*",
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^3.2.7",
+    "zod": "^4.6.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,json,md,yml,yaml,css,html}": [
+      "prettier --write"
+    ],
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ]
+  }
+}

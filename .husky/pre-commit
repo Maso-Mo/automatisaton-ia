@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# .husky/pre-commit — CI locale, versionnée (docs/09 §13.1).
+#
+# Règle : ce hook DOIT tenir sous 15 secondes. Un pré-commit lent finit
+# désactivé, et un pré-commit désactivé ne protège rien. Les tests
+# d'intégration, les E2E et les migrations sont donc volontairement absents
+# (ils sont dans scripts/verify.sh, à lancer avant un commit de fin de journée).
+# ---------------------------------------------------------------------------
+set -e
+
+pnpm lint-staged   # formatage + ESLint sur les fichiers modifiés
+pnpm typecheck     # tsc strict, aucun `any` implicite
+pnpm test:unit     # tests unitaires seuls (rapides)

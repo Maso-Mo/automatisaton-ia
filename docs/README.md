@@ -19,6 +19,9 @@
 11. **`10-plan-de-developpement-12-etapes.md`** — l'ordre d'exécution, avec critères de fin.
 12. **`11-risques-decisions-et-limites.md`** — ce qui peut casser, ce qui est réversible,
     et ce qui doit volontairement attendre.
+13. **`12-mise-en-oeuvre-etape-1.md`** — ce qui a été **réellement** construit à l'étape 1 :
+    décisions prises en chemin (M1 à M12), ce qui n'a pas été construit et pourquoi, tests,
+    points ouverts. À lire après avoir codé quelque chose, pas avant.
 
 
 ## Règles de rédaction
