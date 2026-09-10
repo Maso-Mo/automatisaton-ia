@@ -158,7 +158,11 @@ avant les fonctionnalités :
    la rédaction du message passe désormais par `hooks.logMethod`, celle de la pile par la rédaction
    de l'erreur — détecté par `pnpm check:canary`, puis figé par un test ;
 3. **racine du dépôt déduite du `cwd`** : `pnpm dev:worker` refusait de démarrer (clés introuvables)
-   et aurait créé une base par application — corrigé par `findWorkspaceRoot()` et un test.
+   et aurait créé une base par application — corrigé par `findWorkspaceRoot()` et un test ;
+4. **quatre fichiers silencieusement absents du dépôt** : la règle `.gitignore` `media/` masquait
+   aussi `packages/media/` (le paquet réservé) et `prompts/media/`. Détecté en relisant `git ls-files`
+   après le premier commit : tout stockage local vit désormais uniquement sous `data/`, et un dossier
+   de code ne peut plus être ignoré par accident.
 
 **Ce qui n'est pas testé, et assumé** : le rendu visuel de l'écran de diagnostic (aucun test
 d'interface à l'étape 1) ; les comportements liés à `FFmpeg` et `whisper` (pas encore de code) ; les
