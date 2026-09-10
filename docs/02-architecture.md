@@ -207,9 +207,11 @@ est plus long devient un job et renvoie un `job_id`.
 | **Erreurs possibles** | Base verrouillée, migration échouée, contrainte violée, fichier corrompu |
 
 > **Contrat de portabilité** : tous les accès passent par `packages/database`. Aucun import
-> de `drizzle-orm/sqlite-core` en dehors de ce package. Les dates sont stockées en texte
-> ISO-8601, les identifiants en texte (UUID v7), les booléens en entier. La migration vers
-> PostgreSQL devient alors un travail de dialecte, pas une réécriture logique.
+> de `drizzle-orm/sqlite-core` en dehors de ce package. Les horodatages sont stockés en
+> `INTEGER` (millisecondes epoch), les identifiants en texte (UUID v7), les booléens en entier,
+> les montants en micro-dollars entiers, le JSON en texte validé par Zod. La migration vers
+> PostgreSQL devient alors un travail de dialecte, pas une réécriture logique. Détail :
+> [`03-modele-de-donnees.md`](03-modele-de-donnees.md) §2 et §17.
 
 ### `packages/media` — Médias et vidéo
 
