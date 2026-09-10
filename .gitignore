@@ -17,13 +17,15 @@ out/
 coverage/
 
 # ---------------------------------------------------------------------------
-# Données locales (base, médias, exports) — ne doivent JAMAIS être commités
+# Données locales (base, médias, exports) — ne doivent JAMAIS être commités.
+#
+# Tout vit sous `data/` : le dossier par défaut des médias est `data/media`
+# (voir MEDIA_ROOT dans .env.example). C'est volontaire — ignorer un dossier
+# nommé `media/` masquerait aussi `packages/media/` et `prompts/media/`, ce qui
+# a réellement eu lieu lors de l'étape 1 (fichiers jamais ajoutés à git).
 # ---------------------------------------------------------------------------
 data/
-media/
-exports/
-renders/
-tmp/
+/tmp/
 *.sqlite
 *.sqlite3
 *.db
