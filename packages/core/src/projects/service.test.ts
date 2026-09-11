@@ -26,6 +26,8 @@ import {
   verifyFact,
 } from './service';
 import type { Project, ProjectFact, ProjectMemoryPorts, ProjectMemoryStore } from './types';
+import type { ProjectSkillFact } from './skills';
+import type { AudienceProfile, StyleProfile } from './profiles';
 
 const NOW = Date.UTC(2026, 2, 10, 12, 0, 0);
 
@@ -43,6 +45,9 @@ function createMemoryPorts(): ProjectMemoryPorts & {
 } {
   const projects: Project[] = [];
   const facts: ProjectFact[] = [];
+  const skills: ProjectSkillFact[] = [];
+  const audiences: AudienceProfile[] = [];
+  const styles: StyleProfile[] = [];
   let counter = 0;
 
   const store: ProjectMemoryStore = {
@@ -96,6 +101,36 @@ function createMemoryPorts(): ProjectMemoryPorts & {
         }),
     },
     owner: { currentId: () => 'owner-1' },
+    skillFacts: {
+      insert: (record) => {
+        skills.push(record);
+      },
+      patch: (id, patch) => {
+        const index = skills.findIndex((skill) => skill.id === id);
+        const current = skills[index];
+        if (index < 0 || !current) return 0;
+        skills[index] = { ...current, ...patch };
+        return 1;
+      },
+      byId: (id) => skills.find((skill) => skill.id === id),
+      list: (projectId) => skills.filter((skill) => skill.projectId === projectId),
+      byProjectAndSkill: (projectId, skill) =>
+        skills.find((item) => item.projectId === projectId && item.skill === skill),
+    },
+    audienceProfiles: {
+      insert: (record) => {
+        audiences.push(record);
+      },
+      byId: (id) => audiences.find((profile) => profile.id === id),
+      list: (projectId) => audiences.filter((profile) => profile.projectId === projectId),
+    },
+    styleProfiles: {
+      insert: (record) => {
+        styles.push(record);
+      },
+      byId: (id) => styles.find((profile) => profile.id === id),
+      list: (projectId) => styles.filter((profile) => profile.projectId === projectId),
+    },
     transaction: (operation) => operation(),
   };
 

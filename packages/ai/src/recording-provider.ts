@@ -34,6 +34,11 @@ export interface RecordingProviderDeps {
   baseContext?: LLMCallContext;
   /** Cumul du coût sur le job : c'est ce qui relie un coût à un job. */
   onCost?: (microUsd: number, usage: LLMUsage) => void | Promise<void>;
+  /**
+   * Identifiant de la ligne `llm_calls` écrite : c'est ce qui permet de rattacher
+   * un message ou une fiche maître à l'appel qui l'a produit (traçabilité).
+   */
+  onLlmCallId?: (id: string) => void;
 }
 
 export function withRecording(inner: LLMProvider, deps: RecordingProviderDeps): LLMProvider {
@@ -62,9 +67,10 @@ export function withRecording(inner: LLMProvider, deps: RecordingProviderDeps): 
       temperature?: number;
     },
   ): void {
-    deps.recorder.record({
+    const id = deps.recorder.record({
       jobId: ctx.jobId ?? deps.baseContext?.jobId ?? null,
       projectId: ctx.projectId ?? deps.baseContext?.projectId ?? null,
+      conversationId: ctx.conversationId ?? deps.baseContext?.conversationId ?? null,
       contentItemId: ctx.contentId ?? deps.baseContext?.contentId ?? null,
       agent: ctx.agent,
       task: ctx.task,
@@ -83,8 +89,8 @@ export function withRecording(inner: LLMProvider, deps: RecordingProviderDeps): 
       errorCode: params.errorCode ?? null,
       temperature: params.temperature ?? null,
     });
+    deps.onLlmCallId?.(id);
   }
-
   return {
     id: inner.id,
 

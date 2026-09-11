@@ -3,20 +3,22 @@ import { useState } from 'react';
 import { api, type CheckStatus, type SystemHealth } from './api/client';
 import { JobsSection } from './components/JobsSection';
 import { Metrics } from './components/Metrics';
+import { ConversationView } from './features/conversation/ConversationView';
 import { ProjectsView } from './features/projects/ProjectsView';
 
 /**
- * Application de l'étape 2 : deux vues, sans routeur (un routeur ne se justifie
- * pas pour deux onglets, docs/10 §1.3).
+ * Application de l'étape 3 : trois vues, sans routeur (un routeur ne se justifie
+ * pas pour trois onglets, docs/10 §1.3).
  *
+ * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
+ *   maître se relit et se valide.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
  * - **Diagnostic** (étape 1) : *le socle est-il en état ?*
  *
- * Aucune autre fonctionnalité n'existe : la conversation et la génération
- * arrivent aux étapes 3 et 4 (docs/10 §4.2, « Interdits »).
+ * La génération de contenus n'existe pas encore : elle arrive à l'étape suivante.
  */
 
-type View = 'diagnostic' | 'projects';
+type View = 'diagnostic' | 'projects' | 'conversation';
 
 const CHECK_STYLES: Record<CheckStatus, { icon: string; className: string }> = {
   ok: { icon: '✅', className: 'border-emerald-200 bg-emerald-50' },
@@ -37,7 +39,7 @@ const GLOBAL_LABELS: Record<SystemHealth['status'], string> = {
 };
 
 export function App() {
-  const [view, setView] = useState<View>('projects');
+  const [view, setView] = useState<View>('conversation');
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 5_000 });
   const summary = useQuery({
     queryKey: ['jobs-summary'],
@@ -50,12 +52,13 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 2 : mémoire structurée des projets. La conversation, la fiche maître et la
-          génération de contenus n’existent pas encore — elles arrivent aux étapes 3 et 4.
+          Étape 3 : conversation par texte et fiche maître. La génération de contenus n’existe pas
+          encore — elle arrive à l’étape suivante.
         </p>
         <nav className="mt-4 flex gap-2" aria-label="Vues">
           {(
             [
+              ['conversation', 'Conversation'],
               ['projects', 'Projets'],
               ['diagnostic', 'Diagnostic'],
             ] as const
@@ -76,6 +79,8 @@ export function App() {
           ))}
         </nav>
       </header>
+
+      {view === 'conversation' && <ConversationView />}
 
       {view === 'projects' && <ProjectsView />}
 

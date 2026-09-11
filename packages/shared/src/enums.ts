@@ -196,6 +196,47 @@ export const FACT_SOURCE_LABELS: Record<FactSource, string> = {
   ai_proposal: 'Proposé par l’IA',
 };
 
+export const CONVERSATION_KIND_LABELS: Record<ConversationKind, string> = {
+  interview: 'Entretien de projet',
+  news_discussion: 'Discussion d’actualité',
+  feedback: 'Retour sur un contenu',
+  freeform: 'Conversation libre',
+};
+
+/** Les libellés de phase disent **ce qu'on cherche**, pas un identifiant technique. */
+export const CONVERSATION_STAGE_LABELS: Record<ConversationStage, string> = {
+  intake: 'Qui vous êtes, ce que vous faites',
+  positioning: 'Ce pour quoi vous voulez être reconnu',
+  audience: 'À qui vous parlez',
+  voice: 'Votre façon de parler',
+  fact_extraction: 'Faits, chiffres et expériences',
+  strategy: 'Rythme, plateformes et objectifs',
+  brief_ready: 'Fiche maître à relire',
+  closed: 'Entretien terminé',
+};
+
+export const MESSAGE_ROLE_LABELS: Record<MessageRole, string> = {
+  user: 'Vous',
+  assistant: 'Assistant',
+  system: 'Système',
+  tool: 'Mémoire consultée',
+};
+
+export const MESSAGE_TYPE_LABELS: Record<MessageType, string> = {
+  text: 'Texte',
+  question: 'Question',
+  options: 'Options',
+  proposal: 'Proposition',
+  confirmation: 'Confirmation',
+  error: 'Erreur',
+};
+
+export const MASTER_BRIEF_STATUS_LABELS: Record<MasterBriefStatus, string> = {
+  draft: 'Brouillon',
+  validated: 'Validée',
+  superseded: 'Remplacée',
+};
+
 export const SKILL_LEVELS = ['debutant', 'intermediaire', 'avance', 'expert'] as const;
 export type SkillLevel = (typeof SKILL_LEVELS)[number];
 export const skillLevelSchema = z.enum(SKILL_LEVELS);
@@ -246,6 +287,77 @@ export const goalMetricSchema = z.enum(GOAL_METRICS);
 export const GOAL_STATUSES = ['active', 'reached', 'missed', 'abandoned'] as const;
 export type GoalStatus = (typeof GOAL_STATUSES)[number];
 export const goalStatusSchema = z.enum(GOAL_STATUSES);
+
+// --- Conversation et fiche maître (docs/03 §7, §8.1) -----------------------
+
+export const CONVERSATION_KINDS = ['interview', 'news_discussion', 'feedback', 'freeform'] as const;
+export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
+export const conversationKindSchema = z.enum(CONVERSATION_KINDS);
+
+/**
+ * Les huit phases d'un entretien (docs/05 §3.1). `stage` est un **état
+ * explicite** : la transition est décidée par du code, sur la base de champs
+ * obligatoires réellement présents en base — jamais par le jugement du modèle.
+ */
+export const CONVERSATION_STAGES = [
+  'intake',
+  'positioning',
+  'audience',
+  'voice',
+  'fact_extraction',
+  'strategy',
+  'brief_ready',
+  'closed',
+] as const;
+export type ConversationStage = (typeof CONVERSATION_STAGES)[number];
+export const conversationStageSchema = z.enum(CONVERSATION_STAGES);
+
+export const MESSAGE_ROLES = ['user', 'assistant', 'system', 'tool'] as const;
+export type MessageRole = (typeof MESSAGE_ROLES)[number];
+export const messageRoleSchema = z.enum(MESSAGE_ROLES);
+
+export const MESSAGE_TYPES = [
+  'text',
+  'question',
+  'options',
+  'proposal',
+  'confirmation',
+  'error',
+] as const;
+export type MessageType = (typeof MESSAGE_TYPES)[number];
+export const messageTypeSchema = z.enum(MESSAGE_TYPES);
+
+/** Mode d'entrée d'un message utilisateur. Le vocal arrive à l'étape média. */
+export const MESSAGE_INPUT_MODES = ['text', 'voice', 'file'] as const;
+export type MessageInputMode = (typeof MESSAGE_INPUT_MODES)[number];
+export const messageInputModeSchema = z.enum(MESSAGE_INPUT_MODES);
+
+export const CONVERSATION_SUMMARY_SCOPES = ['rolling', 'final'] as const;
+export type ConversationSummaryScope = (typeof CONVERSATION_SUMMARY_SCOPES)[number];
+export const conversationSummaryScopeSchema = z.enum(CONVERSATION_SUMMARY_SCOPES);
+
+/** `superseded` : une nouvelle version a remplacé celle-ci (docs/03 §8.1). */
+export const MASTER_BRIEF_STATUSES = ['draft', 'validated', 'superseded'] as const;
+export type MasterBriefStatus = (typeof MASTER_BRIEF_STATUSES)[number];
+export const masterBriefStatusSchema = z.enum(MASTER_BRIEF_STATUSES);
+
+/**
+ * Ce qui manque à la mémoire d'un projet : la liste qui pilote les questions de
+ * l'entretien (docs/03 §7.1). L'ordre est celui des phases documentées, et la
+ * première lacune **est** la phase courante. C'est la clé du produit : une
+ * question dont la réponse est déjà en base ne doit jamais être posée.
+ */
+export const CONVERSATION_SLOTS = [
+  'skills',
+  'positioning',
+  'audience',
+  'voice',
+  'facts',
+  'strategy',
+] as const;
+export type ConversationSlot = (typeof CONVERSATION_SLOTS)[number];
+export const conversationSlotSchema = z.enum(CONVERSATION_SLOTS);
+
 // --- Configuration ---------------------------------------------------------
 
 export const SETTING_VALUE_TYPES = ['string', 'number', 'boolean', 'json'] as const;
@@ -329,4 +441,15 @@ export const ENUM_REGISTRY = {
   ASR_ENGINES: { values: ASR_ENGINES, schema: asrEngineSchema },
   PLATFORM_IDS: { values: PLATFORM_IDS, schema: platformIdSchema },
   BUDGET_PERIODS: { values: BUDGET_PERIODS, schema: budgetPeriodSchema },
+  CONVERSATION_KINDS: { values: CONVERSATION_KINDS, schema: conversationKindSchema },
+  CONVERSATION_STAGES: { values: CONVERSATION_STAGES, schema: conversationStageSchema },
+  MESSAGE_ROLES: { values: MESSAGE_ROLES, schema: messageRoleSchema },
+  MESSAGE_TYPES: { values: MESSAGE_TYPES, schema: messageTypeSchema },
+  MESSAGE_INPUT_MODES: { values: MESSAGE_INPUT_MODES, schema: messageInputModeSchema },
+  CONVERSATION_SUMMARY_SCOPES: {
+    values: CONVERSATION_SUMMARY_SCOPES,
+    schema: conversationSummaryScopeSchema,
+  },
+  MASTER_BRIEF_STATUSES: { values: MASTER_BRIEF_STATUSES, schema: masterBriefStatusSchema },
+  CONVERSATION_SLOTS: { values: CONVERSATION_SLOTS, schema: conversationSlotSchema },
 } as const;

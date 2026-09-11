@@ -9,6 +9,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { users } from './users';
+import { messages } from './conversation';
 
 /**
  * Projets et mémoire longue — le différenciateur du produit (docs/03 §5, §6).
@@ -84,9 +85,10 @@ export const projectFacts = sqliteTable(
     statement: text().notNull(),
     detail: text(),
     source: text().notNull(), // 'user_input'|'user_edit'|'user_import'|'conversation'|'ai_proposal'
-    // La contrainte vers `messages` (étape 3) est ajoutée par la migration qui crée
-    // cette table : SQLite ne sait pas ajouter une FK sans reconstruire la table.
-    source_message_id: text(),
+    // Contrainte ajoutée par la migration qui crée `messages` (SQLite ne sait pas
+    // ajouter une clé étrangère sans reconstruire la table) : un fait extrait d'un
+    // échange cite toujours le message dont il vient.
+    source_message_id: text().references(() => messages.id),
     verified_by_user: integer({ mode: 'boolean' }).notNull().default(false),
     /**
      * `proposed` | `user_provided` | `verified` | `uncertain` | `obsolete` | `superseded`.

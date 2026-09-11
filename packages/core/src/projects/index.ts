@@ -14,8 +14,10 @@
  */
 
 export * from './facts';
+export * from './profiles';
 export * from './projects';
 export * from './selection';
 export * from './service';
+export * from './skills';
 export * from './types';
 export * from './schemas';

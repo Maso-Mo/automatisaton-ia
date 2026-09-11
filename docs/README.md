@@ -22,6 +22,9 @@
 13. **`12-mise-en-oeuvre-etape-1.md`** — ce qui a été **réellement** construit à l'étape 1 :
     décisions prises en chemin (M1 à M12), ce qui n'a pas été construit et pourquoi, tests,
     points ouverts. À lire après avoir codé quelque chose, pas avant.
+14. **`13-mise-en-oeuvre-etape-3.md`** — idem pour l'étape 3 (conversation IA et fiche maître) :
+    décisions (M1 à M16), ce qui n'a pas été construit, tests, points laissés ouverts, et la
+    correspondance avec la numérotation du plan.
 
 
 ## Règles de rédaction

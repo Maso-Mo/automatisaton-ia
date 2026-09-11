@@ -13,9 +13,15 @@
  * métier en a besoin.
  */
 
+export * from './agents/agent';
+export * from './agents/interviewer';
+export * from './agents/strategist';
+export * from './memory-pack';
 export * from './pricing';
 export * from './prompts/sync';
 export * from './provider';
+export * from './providers/deepseek';
+export * from './providers/openai-compatible';
 export * from './providers/scripted';
 export * from './recorder';
 export * from './recording-provider';

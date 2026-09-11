@@ -18,6 +18,23 @@ import {
   type FactEditInput,
 } from './facts';
 import {
+  assertSkillContent,
+  buildSkillFact,
+  highestLevel,
+  type ProjectSkillFact,
+  type SkillFactInput,
+  type SkillFactPatch,
+} from './skills';
+import {
+  assertAudienceContent,
+  buildAudienceProfile,
+  buildStyleProfile,
+  type AudienceProfile,
+  type AudienceProfileInput,
+  type StyleProfile,
+  type StyleProfileInput,
+} from './profiles';
+import {
   assertProjectEditable,
   planProjectEdit,
   uniqueSlug,
@@ -67,6 +84,9 @@ export interface AddFactInput {
   source?: FactSource;
   verificationStatus?: FactVerificationStatus;
   verificationNote?: string | null;
+  /** Message d'où le fait a été extrait : la traçabilité d'un fait de conversation. */
+  sourceMessageId?: string | null;
+  /** Importance explicite ; `undefined` ⇒ 3 (valeur par défaut documentée). */
 }
 
 export interface ReplaceFactInput extends AddFactInput {
@@ -149,7 +169,7 @@ function buildFact(
     statement,
     detail,
     source,
-    sourceMessageId: null,
+    sourceMessageId: input.sourceMessageId ?? null,
     verificationStatus,
     verificationNote: input.verificationNote ?? null,
     verifiedAt,
@@ -363,6 +383,127 @@ export function replaceFact(
       replacement,
     };
   });
+}
+
+// --- Compétences (docs/03 §6.2) --------------------------------------------
+
+export function listProjectSkills(
+  ports: ProjectMemoryPorts,
+  projectId: string,
+): ProjectSkillFact[] {
+  requireProject(ports, projectId);
+  return storePorts(ports).skillFacts.list(projectId);
+}
+
+/**
+ * Enregistre ou met à jour une compétence. Le **nom** est la clé (unicité
+ * `(project_id, skill)`) : on ne crée jamais deux fois « n8n ».
+ *
+ * Deux règles de progression, choisies pour ne jamais exagérer ce que
+ * l'utilisateur sait faire :
+ *
+ * 1. le niveau ne **régresse pas** par accident : il ne peut que monter
+ *    (`highestLevel`) ;
+ * 2. la confiance ne baisse pas non plus : une compétence confirmée une fois ne
+ *    redevient pas douteuse sur une phrase ambiguë.
+ *
+ * Une correction à la baisse reste possible ailleurs — c'est un geste explicite
+ * de l'utilisateur (`PATCH` sur la compétence), pas un effet de bord d'entretien.
+ */
+export function upsertSkillFact(
+  ports: ProjectMemoryPorts,
+  projectId: string,
+  input: SkillFactInput,
+): { skill: ProjectSkillFact; created: boolean } {
+  const store = storePorts(ports);
+  const project = requireProject(ports, projectId);
+  assertProjectEditable(project);
+
+  const name = assertSkillContent(input);
+  const existing = store.skillFacts.byProjectAndSkill(projectId, name);
+  const now = ports.clock.nowMs();
+
+  if (!existing) {
+    const created = buildSkillFact(ports, projectId, input);
+    store.skillFacts.insert(created);
+    return { skill: created, created: true };
+  }
+
+  const patch: SkillFactPatch = {
+    level: highestLevel(existing.level, input.level),
+    confidence: Math.max(existing.confidence, input.confidence ?? existing.confidence),
+    lastUpdatedAt: now,
+  };
+  if (input.evidence !== undefined && input.evidence !== null) patch.evidence = input.evidence;
+  if (input.learnedHow !== undefined) patch.learnedHow = input.learnedHow;
+  if (input.isLearning !== undefined) patch.isLearning = input.isLearning;
+  if (input.learningTarget !== undefined) patch.learningTarget = input.learningTarget;
+
+  store.skillFacts.patch(existing.id, patch);
+  return { skill: { ...existing, ...patch }, created: false };
+}
+
+// --- Profils d'audience et de style (docs/05 §3.1) -------------------------
+
+export function listAudienceProfiles(
+  ports: ProjectMemoryPorts,
+  projectId: string,
+): AudienceProfile[] {
+  requireProject(ports, projectId);
+  return storePorts(ports).audienceProfiles.list(projectId);
+}
+
+/** Un profil d'audience nommé deux fois n'existe pas : c'est le même public. */
+export function addAudienceProfile(
+  ports: ProjectMemoryPorts,
+  projectId: string,
+  input: AudienceProfileInput,
+): AudienceProfile {
+  const store = storePorts(ports);
+  const project = requireProject(ports, projectId);
+  assertProjectEditable(project);
+
+  const name = assertAudienceContent(input);
+  const existing = store.audienceProfiles
+    .list(projectId)
+    .find((profile) => profile.name.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+
+  const profile = buildAudienceProfile(ports, projectId, input);
+  store.audienceProfiles.insert(profile);
+  return profile;
+}
+
+export function listStyleProfiles(ports: ProjectMemoryPorts, projectId: string): StyleProfile[] {
+  requireProject(ports, projectId);
+  return storePorts(ports).styleProfiles.list(projectId);
+}
+
+/**
+ * Le style d'un projet est unique (`uq_style_scope` sur `(project_id, scope,
+ * platform)` avec `platform` nul) : un second profil projet **remplace** le
+ * premier plutôt que de coexister. Deux voix concurrentes donneraient des
+ * contenus incohérents.
+ */
+export function addStyleProfile(
+  ports: ProjectMemoryPorts,
+  projectId: string,
+  input: StyleProfileInput,
+): StyleProfile {
+  const store = storePorts(ports);
+  const project = requireProject(ports, projectId);
+  assertProjectEditable(project);
+
+  const scope = input.scope ?? 'project';
+  const platform = input.platform ? String(input.platform) : null;
+  const existing = store.styleProfiles
+    .list(projectId)
+    .find((profile) => profile.scope === scope && profile.platform === platform);
+  if (existing) return existing;
+
+  const profile = buildStyleProfile(ports, projectId, input);
+  store.styleProfiles.insert(profile);
+  return profile;
 }
 
 // --- Contexte déterministe -------------------------------------------------

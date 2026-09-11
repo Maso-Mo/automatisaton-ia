@@ -39,7 +39,8 @@ export interface LlmCallRecord {
 }
 
 export interface LlmCallRecorder {
-  record(entry: LlmCallRecord): void;
+  /** Enregistre l'appel et rend son identifiant : la trace est utilisable. */
+  record(entry: LlmCallRecord): string;
 }
 
 /** Sérialisation stable : deux contextes identiques donnent la même empreinte. */
@@ -60,8 +61,9 @@ function stableStringify(value: unknown): string {
 export function createLlmCallRecorder(handle: DatabaseHandle, clock: Clock): LlmCallRecorder {
   return {
     record(entry) {
+      const id = uuidv7(clock.nowMs());
       insertLlmCall(handle, {
-        id: uuidv7(clock.nowMs()),
+        id,
         jobId: entry.jobId ?? null,
         projectId: entry.projectId ?? null,
         conversationId: entry.conversationId ?? null,
@@ -90,6 +92,7 @@ export function createLlmCallRecorder(handle: DatabaseHandle, clock: Clock): Llm
             : Math.round(entry.temperature * 100),
         now: clock.nowMs(),
       });
+      return id;
     },
   };
 }
@@ -108,6 +111,7 @@ export function createInMemoryLlmCallRecorder(): LlmCallRecorder & {
     entries,
     record(entry) {
       entries.push(entry);
+      return `call-${entries.length}`;
     },
   };
 }

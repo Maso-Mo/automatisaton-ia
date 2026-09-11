@@ -5,6 +5,8 @@ import type {
   FactVerificationStatus,
   ProjectStatus,
 } from '@aia/shared';
+import type { ProjectSkillFact, SkillFactPatch } from './skills';
+import type { AudienceProfile, StyleProfile } from './profiles';
 
 /**
  * Domaine « projets » — étape 2 : la **mémoire structurée** (docs/10 §4.2, docs/03 §5 et §6).
@@ -119,6 +121,33 @@ export interface ProjectMemoryStore {
     patch(id: string, patch: ProjectFactPatch): number;
     byId(id: string): ProjectFact | undefined;
     list(filter: FactFilter): ProjectFact[];
+  };
+  /**
+   * Compétences (docs/03 §6.2) : la table qui empêche le produit de faire passer
+   * une automatisation pour une compétence de l'utilisateur. Elle arrive dans le
+   * port à l'étape 3, parce que l'entretien est la seule façon de la remplir.
+   */
+  skillFacts: {
+    insert(record: ProjectSkillFact): void;
+    patch(id: string, patch: SkillFactPatch): number;
+    byId(id: string): ProjectSkillFact | undefined;
+    list(projectId: string): ProjectSkillFact[];
+    byProjectAndSkill(projectId: string, skill: string): ProjectSkillFact | undefined;
+  };
+  /**
+   * Profils d'audience et de style (docs/03 §6.3, §6.4) : remplis par l'entretien
+   * (phases `audience` et `voice`), ils racontent pour qui et comment
+   * l'utilisateur écrit. Sans eux, aucun contenu n'est « de cet utilisateur ».
+   */
+  audienceProfiles: {
+    insert(record: AudienceProfile): void;
+    byId(id: string): AudienceProfile | undefined;
+    list(projectId: string): AudienceProfile[];
+  };
+  styleProfiles: {
+    insert(record: StyleProfile): void;
+    byId(id: string): StyleProfile | undefined;
+    list(projectId: string): StyleProfile[];
   };
   /** Propriétaire courant (mono-utilisateur en V1, docs/03 §4.1). */
   owner: {

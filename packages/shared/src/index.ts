@@ -6,6 +6,7 @@
  * par les paquets d'infrastructure que `packages/core` ne peut pas importer.
  */
 
+export * from './contracts';
 export * from './enums';
 export * from './errors';
 export * from './ids';

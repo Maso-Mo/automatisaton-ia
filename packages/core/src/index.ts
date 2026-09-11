@@ -11,6 +11,7 @@
  * `apps/api` / `apps/worker` fournissent les implémentations.
  */
 
+export * from './conversation';
 export * from './errors';
 export * from './projects';
 export * from './system/health';

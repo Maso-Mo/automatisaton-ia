@@ -180,10 +180,14 @@ function main(): void {
     }
 
     // 6. `process.env` : seul `packages/config` y accède.
+    // 6. `process.env` : seul `packages/config` y accède — sauf dans les scripts et
+    //    les tests, qui doivent justement simuler un environnement absent, invalide
+    //    ou réel (suite live). C'est la même exception que la règle ESLint.
     const allowedEnv =
       file.owner === 'packages/config' ||
       file.owner === 'scripts' ||
       file.owner === 'tests' ||
+      file.relPath.endsWith('.test.ts') ||
       file.relPath.endsWith('.config.ts');
     if (!allowedEnv && /process\.env/.test(file.content)) {
       add(file.relPath, 'process.env', 'seul packages/config lit process.env (docs/02 §11)');

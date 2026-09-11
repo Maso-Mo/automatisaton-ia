@@ -44,7 +44,7 @@ describe('API des projets (docs/10 §4.2)', () => {
   it('annonce l’étape et ses points d’entrée', async () => {
     const { app } = makeApi();
     const body = (await app.inject({ method: 'GET', url: '/' })).json();
-    expect(body.step).toContain('étape 2');
+    expect(body.step).toContain('étape 3');
     expect(body.endpoints).toContain('POST /projects');
     expect(body.endpoints).toContain('GET /projects/:id/context');
   });

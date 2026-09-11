@@ -1,6 +1,7 @@
 import {
   applyMigrations,
   countJobsByStatus,
+  createConversationStore,
   createProjectMemoryStore,
   getJob,
   isMigrated,
@@ -26,14 +27,17 @@ import {
   type Config,
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
-import { loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
+import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
 import {
   getSystemHealth,
+  type ConversationPorts,
   type ProjectMemoryPorts,
   type SystemHealth,
   type SystemHealthPorts,
 } from '@aia/core';
 import { createSystemClock, uuidv7, type Clock } from '@aia/shared';
+import { createConversationAgents, type ConversationAgents } from './features/agents';
+import type { ConversationFeatureDeps } from './features/conversation';
 
 const APP_VERSION = '0.1.0';
 const STARTED_AT = Date.now();
@@ -54,6 +58,10 @@ export interface ApiContext {
   startedAtMs: number;
   /** Ports du domaine « mémoire des projets » — c'est `core` qui décide. */
   memory: ProjectMemoryPorts;
+  /** Ports du domaine « conversation » (étape 3). */
+  conversation: ConversationPorts;
+  /** Agents + orchestration du tour : le seul pont entre `core` et `ai`. */
+  conversationFeature: ConversationFeatureDeps;
   health(): SystemHealth;
   jobs(filter?: { statuses?: JobRow['status'][]; limit?: number }): JobRow[];
   job(id: string): JobRow | undefined;
@@ -61,7 +69,18 @@ export interface ApiContext {
 }
 
 export function buildApi(
-  overrides: { config?: Config; logger?: AppLogger; clock?: Clock } = {},
+  overrides: {
+    config?: Config;
+    logger?: AppLogger;
+    clock?: Clock;
+    /**
+     * Agents de conversation injectables : les tests HTTP exercent le chemin réel
+     * (route → domaine → mémoire → fiche maître) avec un fournisseur scripté,
+     * sans réseau et sans coût. En production, la fabrique par défaut lit la
+     * configuration (docs/02 §11).
+     */
+    agents?: ConversationAgents;
+  } = {},
 ): ApiContext {
   const config = overrides.config ?? loadConfig();
   ensureLocalDirectories(config);
@@ -171,6 +190,34 @@ export function buildApi(
     newId: () => uuidv7(clock.nowMs()),
   };
 
+  /**
+   * Conversation (étape 3) : le domaine décide (phases, lacunes, propositions,
+   * fiche maître), `@aia/ai` fournit les agents. Le câblage est ici, au point de
+   * composition — aucun des deux paquets ne connaît l'autre (docs/02 §5).
+   */
+  const conversation: ConversationPorts = {
+    store: createConversationStore(handle, { nowMs: () => clock.nowMs() }),
+    memory: memory.store,
+    clock,
+    newId: () => uuidv7(clock.nowMs()),
+  };
+
+  const conversationFeature: ConversationFeatureDeps = {
+    memory,
+    ports: conversation,
+    agents:
+      overrides.agents ??
+      createConversationAgents({
+        config,
+        handle,
+        clock,
+        logger,
+        budget,
+        recorder: createLlmCallRecorder(handle, clock),
+      }),
+    logger,
+  };
+
   return {
     config,
     handle,
@@ -179,6 +226,8 @@ export function buildApi(
     budget,
     startedAtMs: STARTED_AT,
     memory,
+    conversation,
+    conversationFeature,
     health: () => getSystemHealth(ports),
     jobs: (filter = {}) => listJobs(handle, filter),
     job: (id) => getJob(handle, id),

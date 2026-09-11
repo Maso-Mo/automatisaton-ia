@@ -8,6 +8,7 @@
 
 export * from './client';
 export * from './migrations';
+export * from './repositories/conversation';
 export * from './repositories/job-events';
 export * from './repositories/jobs';
 export * from './repositories/llm-calls';

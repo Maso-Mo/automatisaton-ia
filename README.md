@@ -5,9 +5,16 @@
 > **La documentation de conception est la source de vérité** : le produit final, son architecture,
 > son modèle de données, ses pipelines, sa stratégie de tests et son plan en 12 étapes.
 >
-> **L'étape 1 est implémentée** (fondations exécutables) : monorepo pnpm, API Fastify, worker,
-> base SQLite migrée, file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic.
-> Elle ne contient **aucune fonctionnalité métier** — c'est volontaire (`docs/10` §4.1).
+> **Les étapes 1 à 3 sont implémentées** :
+> - **étape 1** (fondations exécutables) : monorepo pnpm, API Fastify, worker, base SQLite migrée,
+>   file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic ;
+> - **étape 2** (mémoire des projets) : projets, faits typés avec états de vérification, sélection
+>   déterministe du contexte — aucune IA ;
+> - **étape 3** (conversation IA et fiche maître) : entretien par texte avec un assistant branché sur
+>   DeepSeek, propositions d'écriture **validées par l'utilisateur**, fiche maître versionnée.
+>
+> Aucune génération de contenu (LinkedIn, Reddit, TikTok, YouTube) n'existe encore : elle arrive à
+> l'étape suivante.
 >
 > Règle issue du cahier des charges (§46 — Priorité absolue) : *ne pas commencer à coder avant
 > d'avoir l'architecture, le modèle de données, les flux, les responsabilités, les interfaces
@@ -15,8 +22,8 @@
 > avant la première ligne de code, et elle reste la référence : **toute contribution commence par
 > la mise à jour de la documentation**.
 >
-> Compte rendu d'exécution de l'étape 1 (décisions prises, ce qui n'a pas été construit, ce qui
-> reste ouvert) : **[docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md)**.
+> Comptes rendus d'exécution : **[docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md)**
+> et **[docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md)**.
 
 ---
 
@@ -78,31 +85,40 @@ techniquement.
 | [docs/10-plan-de-developpement-12-etapes.md](docs/10-plan-de-developpement-12-etapes.md) | **Les 12 étapes de développement** : objectif, livrables, dépendances, critères d'acceptation, tests, risques, complexité |
 | [docs/11-risques-decisions-et-limites.md](docs/11-risques-decisions-et-limites.md) | Risques techniques/produit, compromis, décisions réversibles vs coûteuses, ce qui doit attendre |
 | [docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md) | **Compte rendu d'exécution de l'étape 1** : décisions prises (M1 à M12), ce qui n'a pas été construit, tests, points ouverts |
+| [docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md) | **Compte rendu d'exécution de l'étape 3** : conversation IA et fiche maître — décisions (M1 à M16), ce qui n'a pas été construit, tests, points ouverts |
 
 ---
 
-## 3bis. Démarrage rapide (étape 1)
+## 3bis. Démarrage rapide (étapes 1 à 3)
 
 ```bash
 pnpm install                  # dépendances (better-sqlite3 compilé localement)
 cp .env.example .env          # puis renseigner les deux clés obligatoires :
 openssl rand -hex 32          #   SESSION_SECRET
 openssl rand -hex 32          #   ENCRYPTION_KEY
+# puis DEEPSEEK_API_KEY=sk-... pour que la conversation fonctionne réellement
 
 pnpm check:env                # état de l'environnement (bloquant ou dégradé)
-pnpm db:migrate               # crée data/app.db et les 13 tables de l'étape 1
+pnpm db:migrate               # crée data/app.db et les 17 tables des étapes 1 à 3
 pnpm dev                      # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
 
 pnpm job:noop -- --wait       # sonde de bout en bout : statut, événements, coût calculé
 pnpm verify                   # types, lint, tests, migrations, frontières, canari, environnement
 ```
 
-L'écran de diagnostic (`http://127.0.0.1:5173`) affiche : base migrée, worker actif,
-clé IA présente, budget du jour. **C'est tout ce que fait l'étape 1** — aucune
-fonctionnalité métier n'existe encore, par construction (`docs/10` §4.1).
+L'interface (`http://127.0.0.1:5173`) a trois onglets :
 
-Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg et whisper ne sont **pas** requis à cette
-étape (leur absence est signalée « dégradé », jamais bloquante).
+- **Conversation** : on discute par texte avec l'assistant, on accepte ou refuse les écritures
+  proposées (chacune cite vos mots), et on relit puis valide la fiche maître ;
+- **Projets** : la mémoire structurée — projets, faits typés, contexte déterministe ;
+- **Diagnostic** : base migrée, worker actif, clé IA présente, budget du jour.
+
+Sans clé DeepSeek, tout démarre et fonctionne sauf l'assistant : l'appel échoue avec
+« clé absente », et l'écran de diagnostic l'indique. **Aucune génération de contenu n'existe
+encore** (`docs/10` §4.3, « Interdits »).
+
+Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg et whisper ne sont **pas** requis à ce stade
+(leur absence est signalée « dégradé », jamais bloquante).
 
 ---
 
@@ -142,18 +158,26 @@ Détail complet et justifications : [docs/02-architecture.md](docs/02-architectu
 
 | Étape | Titre | Palier |
 |---|---|---|
-| 1 | Fondations : monorepo, socle technique, base de données, secrets — **implémentée** | **V1** |
-| 2 | Conversation, transcription vocale et mémoire des projets | **V1** |
-| 3 | Orchestrateur IA, abstraction LLM et suivi des coûts | **V1** |
-| 4 | Fiche maître et génération éditoriale multi-plateformes | **V1** |
-| 5 | Qualité éditoriale, vérification factuelle et anti-spam | **V1** |
-| 6 | Bibliothèque de médias (images, captures, assets) | **V2** |
-| 7 | Pipeline vidéo FFmpeg et sous-titres Whisper | **V2** |
-| 8 | Calendrier éditorial et planification | **V2** |
-| 9 | Publication et connecteurs de plateformes | **V2** |
-| 10 | Veille technologique (pipeline news) | **V3** |
-| 11 | Analytics et boucle d'apprentissage | **V3** |
-| 12 | Durcissement : observabilité, sécurité, portabilité cloud | **V3** |
+| 1 | Fondations exécutables — **implémentée** | **V1** |
+| 2 | Conversation et mémoire — **implémentée** (mémoire à l'étape 2, conversation et fiche maître à l'étape 3) | **V1** |
+| 3 | Conversation IA et fiche maître — **implémentée** (ce dépôt) ; « Sujets, angles et entrée média » du plan reste à faire | **V1** |
+| 4 | Génération éditoriale | **V1** |
+| 5 | Qualité, comptes et publication manuelle | **V1** |
+| 6 | Médias et sauvegarde | **V2** |
+| 7 | Vidéo | **V2** |
+| 8 | Publication par API et budget | **V2** |
+| 9 | Calendrier et planification | **V2** |
+| 10 | Veille et exploitation continue | **V3** |
+| 11 | Analytics et apprentissage | **V3** |
+| 12 | Consolidation et portabilité | **V3** |
+
+> **Numérotation** : ce tableau suit les titres de
+> [`docs/10`](docs/10-plan-de-developpement-12-etapes.md) §2. Le lot livré ici est intitulé
+> « étape 3 — conversation IA et fiche maître » : il correspond à la partie **conversation et
+> fiche maître** de l'étape 2 du plan (`master_briefs`, `conversations`, `messages`,
+> `conversation_summaries`). Les sujets, les angles et l'entrée média (étape 3 du plan)
+> restent à construire. Le détail est dans
+> [docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md).
 
 **V1 = étapes 1 → 5** : l'utilisateur peut discuter, l'IA construit la fiche maître,
 produit des brouillons multi-plateformes vérifiés, et l'utilisateur valide puis copie

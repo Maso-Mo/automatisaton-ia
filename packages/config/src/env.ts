@@ -97,6 +97,8 @@ export const envSchema = z.object({
   LLM_MODEL_LIGHT: optionalText(120),
   LLM_MODEL_STANDARD: optionalText(120),
   DEEPSEEK_API_KEY: optionalText(),
+  /** Modèle DeepSeek utilisé pour la conversation et la fiche maître (docs/04 §7.1). */
+  DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
   OPENROUTER_API_KEY: optionalText(),
   OPENAI_API_KEY: optionalText(),
   ANTHROPIC_API_KEY: optionalText(),

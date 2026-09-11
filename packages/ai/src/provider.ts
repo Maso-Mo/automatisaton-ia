@@ -34,6 +34,8 @@ export interface LLMCallContext {
   projectId?: string;
   subjectId?: string;
   contentId?: string;
+  /** Conversation d'où vient l'appel : renseigne `llm_calls.conversation_id`. */
+  conversationId?: string;
   /** Rattaché par la file : c'est ce qui relie un coût à un job. */
   jobId?: string;
   /** Version de prompt utilisée, pour la traçabilité des résultats. */

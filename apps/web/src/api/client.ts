@@ -171,6 +171,117 @@ export interface FactInput {
   importance?: number;
 }
 
+// --- Conversation et fiche maître (étape 3) --------------------------------
+
+export interface ConversationView {
+  id: string;
+  projectId: string;
+  title: string | null;
+  kind: string;
+  stage: string;
+  missingSlots: string[];
+  modelUsed: string | null;
+  messageCount: number;
+  lastMessageAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  closedAt: number | null;
+}
+
+/** Proposition d'écriture : rien n'est écrit tant qu'elle n'est pas acceptée. */
+export interface PlanProposalView {
+  id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  sourceQuote: string;
+  rejectedReason: string | null;
+  category?: string;
+  statement?: string;
+  skill?: string;
+  level?: string;
+  name?: string;
+  positioning?: string | null;
+  targetGoal?: string | null;
+}
+
+export interface EditPlanView {
+  assistantMessageId: string;
+  sourceMessageId: string;
+  reply: string;
+  suggestedNext: 'continue' | 'make_brief';
+  openQuestions: string[];
+  facts: PlanProposalView[];
+  skills: PlanProposalView[];
+  projectEdits: PlanProposalView[];
+  audiences: PlanProposalView[];
+  styles: PlanProposalView[];
+}
+
+export interface MessageView {
+  id: string;
+  conversationId: string;
+  role: string;
+  content: string | null;
+  contentJson: { plan?: EditPlanView } | null;
+  messageType: string;
+  agent: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  costMicroUsd: number;
+  createdAt: number;
+}
+
+export interface MasterBriefView {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  version: number;
+  status: string;
+  summary: string;
+  positioning: string;
+  targetAudience: string;
+  contentPillars: string[];
+  themes: string[];
+  formats: Array<{ platform: string; formats: string[] }> | null;
+  skillMap: Array<{ skill: string; level: string; isLearning: boolean }> | null;
+  gaps: string[] | null;
+  cadence: Array<{ platform: string; perWeek: number }> | null;
+  successCriteria: string[] | null;
+  validatedAt: number | null;
+}
+
+export interface ConversationDetail {
+  conversation: ConversationView;
+  messages: MessageView[];
+  briefs: MasterBriefView[];
+  nextSlot: string | null;
+  slotLabels: Record<string, string>;
+}
+
+export interface TurnResponse {
+  conversation: ConversationView;
+  userMessage: MessageView;
+  message: MessageView;
+  plan: EditPlanView;
+  usage: { inputTokens: number; outputTokens: number; costMicroUsd: number; model: string };
+  repaired: boolean;
+}
+
+export interface BriefDetailResponse {
+  brief: MasterBriefView;
+  missing: string[];
+  history: MasterBriefView[];
+}
+
+export interface BriefInput {
+  summary?: string;
+  positioning?: string;
+  targetAudience?: string;
+  contentPillars?: string[];
+  themes?: string[];
+  gaps?: string[] | null;
+  successCriteria?: string[] | null;
+}
+
 async function getJson<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'GET' });
 }
@@ -280,6 +391,53 @@ export const api = {
     getJson<ProjectContextView>(
       `/projects/${encodeURIComponent(id)}/context${queryString(params)}`,
     ),
+
+  // --- Conversation et fiche maître (étape 3) -----------------------------
+  conversations: (params: { projectId?: string } = {}) =>
+    getJson<{ conversations: ConversationView[] }>(`/conversations${queryString(params)}`),
+  createConversation: (body: { projectId: string; kind?: string }) =>
+    postJson<{ conversation: ConversationView }>('/conversations', body),
+  conversation: (id: string) =>
+    getJson<ConversationDetail>(`/conversations/${encodeURIComponent(id)}`),
+  /** Un tour complet : le message de l'assistant arrive avec son plan d'écriture. */
+  sendMessage: (id: string, body: { content: string }) =>
+    postJson<TurnResponse>(`/conversations/${encodeURIComponent(id)}/messages`, body),
+  /** Le seul chemin d'écriture en mémoire : accepter des propositions. */
+  applyProposals: (
+    id: string,
+    messageId: string,
+    body: { accept: string[]; confirmFacts?: boolean },
+  ) =>
+    postJson<{ conversation: ConversationView; refused: Array<{ reason: string }> }>(
+      `/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/proposals`,
+      body,
+    ),
+  closeConversation: (id: string) =>
+    postJson<{ conversation: ConversationView }>(`/conversations/${encodeURIComponent(id)}/close`, {
+      closed: true,
+    }),
+  reopenConversation: (id: string) =>
+    postJson<{ conversation: ConversationView }>(
+      `/conversations/${encodeURIComponent(id)}/reopen`,
+      {},
+    ),
+  /** Génération explicite : aucune fiche ne se produit pendant un tour. */
+  generateBrief: (id: string) =>
+    postJson<{ brief: MasterBriefView; missing: string[]; usage: { costMicroUsd: number } }>(
+      `/conversations/${encodeURIComponent(id)}/brief`,
+      {},
+    ),
+  brief: (briefId: string) =>
+    getJson<BriefDetailResponse>(`/briefs/${encodeURIComponent(briefId)}`),
+  updateBrief: (briefId: string, body: BriefInput) =>
+    patchJson<{ brief: MasterBriefView; missing: string[] }>(
+      `/briefs/${encodeURIComponent(briefId)}`,
+      body,
+    ),
+  validateBrief: (briefId: string) =>
+    postJson<{ brief: MasterBriefView }>(`/briefs/${encodeURIComponent(briefId)}/validation`, {}),
+  projectBrief: (projectId: string) =>
+    getJson<{ brief: MasterBriefView | null }>(`/projects/${encodeURIComponent(projectId)}/brief`),
 };
 
 export function formatUsd(microUsd: number): string {

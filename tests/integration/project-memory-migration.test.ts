@@ -122,8 +122,13 @@ describe('migration ascendante de la mémoire des projets', () => {
     seedStepOne(handle);
 
     const second = applyMigrations(handle);
-    expect(second.applied).toBe(1);
-    expect(appliedMigrationCount(handle)).toBe(2);
+    // Deux migrations s'appliquent sur la base peuplée : `0001` (mémoire des
+    // projets) puis `0002` (conversation et fiche maître). La seconde reconstruit
+    // `project_facts` pour y ajouter la clé étrangère vers `messages` : c'est
+    // exactement le genre de migration qui casse une base utilisateur si elle
+    // n'est pas testée sur des données réelles.
+    expect(second.applied).toBe(2);
+    expect(appliedMigrationCount(handle)).toBe(3);
 
     const rows = handle.sqlite
       .prepare(
@@ -168,6 +173,17 @@ describe('migration ascendante de la mémoire des projets', () => {
     expect(names).toContain('uq_facts_supersedes');
     expect(names).toContain('trg_project_facts_no_delete');
     expect(names).toContain('trg_project_facts_verification_requires_human');
+    // Les garanties de l'étape 3 sont posées par la même passe.
+    expect(names).toContain('trg_messages_no_delete');
+    expect(names).toContain('trg_master_briefs_frozen_when_validated');
+    expect(names).toContain('trg_master_briefs_superseded_is_terminal');
+
+    // Les quatre tables de la conversation existent après migration.
+    const tables = listTables(handle);
+    expect(tables).toContain('conversations');
+    expect(tables).toContain('messages');
+    expect(tables).toContain('conversation_summaries');
+    expect(tables).toContain('master_briefs');
 
     // Le déclencheur protège aussi les données migrées.
     expect(() => handle.sqlite.prepare('delete from project_facts').run()).toThrow(

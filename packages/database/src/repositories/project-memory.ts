@@ -1,7 +1,25 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
-import type { FactCategory, FactSource, FactVerificationStatus, ProjectStatus } from '@aia/shared';
+import { encodeJson, parseJsonUnknown } from '@aia/shared';
+import type {
+  AudienceKnowledgeLevel,
+  FactCategory,
+  FactSource,
+  FactVerificationStatus,
+  ProjectStatus,
+  SentenceLength,
+  SkillLearnedHow,
+  SkillLevel,
+  StyleScope,
+  StyleTone,
+} from '@aia/shared';
 import type { DatabaseHandle } from '../client';
-import { projectFacts, projects } from '../schema';
+import {
+  audienceProfiles,
+  projectFacts,
+  projects,
+  projectSkillFacts,
+  styleProfiles,
+} from '../schema';
 import { ensureLocalOwnerId } from './users';
 
 /**
@@ -115,6 +133,71 @@ const MAX_PROJECT_LIMIT = 1_000;
 const DEFAULT_FACT_LIMIT = 500;
 const MAX_FACT_LIMIT = 2_000;
 
+/**
+ * Compétence telle qu'elle est stockée (docs/03 §6.2). Le port du domaine
+ * (`@aia/core`) rend ces objets **structurellement** : mêmes noms de champs,
+ * aucune dépendance du paquet de persistance vers le domaine (docs/02 §5).
+ */
+export interface ProjectSkillFactRecord {
+  id: string;
+  projectId: string;
+  skill: string;
+  level: SkillLevel;
+  evidence: string | null;
+  learnedHow: SkillLearnedHow | null;
+  isLearning: boolean;
+  learningTarget: string | null;
+  confidence: number;
+  lastUpdatedAt: number;
+  createdAt: number;
+}
+
+export interface ProjectSkillFactPatchRecord {
+  level?: SkillLevel;
+  evidence?: string | null;
+  learnedHow?: SkillLearnedHow | null;
+  isLearning?: boolean;
+  learningTarget?: string | null;
+  confidence?: number;
+  lastUpdatedAt: number;
+}
+
+export interface AudienceProfileRecord {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  painPoints: string[];
+  goals: string[];
+  objections: string[];
+  knowledgeLevel: AudienceKnowledgeLevel;
+  vocabulary: string[];
+  platforms: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface StyleProfileRecord {
+  id: string;
+  projectId: string;
+  name: string;
+  scope: StyleScope;
+  platform: string | null;
+  tone: StyleTone | null;
+  formality: number;
+  sentenceLength: SentenceLength | null;
+  humorLevel: number;
+  emojiLevel: number;
+  forbiddenWords: string[];
+  signatureOpenings: string[];
+  signatureClosings: string[];
+  exampleParagraphs: string[];
+  derivedFromTexts: number;
+  confidence: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 const INACTIVE_FACT_STATUSES: FactVerificationStatus[] = ['obsolete', 'superseded'];
 
 function toProject(row: ProjectRow): ProjectRecord {
@@ -165,6 +248,75 @@ function clampLimit(value: number | undefined, fallback: number, max: number): n
   return Math.min(Math.max(value, 1), max);
 }
 
+type SkillFactRow = typeof projectSkillFacts.$inferSelect;
+
+function toSkillFact(row: SkillFactRow): ProjectSkillFactRecord {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    skill: row.skill,
+    level: row.level as SkillLevel,
+    evidence: row.evidence,
+    learnedHow: (row.learned_how ?? null) as SkillLearnedHow | null,
+    isLearning: row.is_learning,
+    learningTarget: row.learning_target,
+    confidence: row.confidence,
+    lastUpdatedAt: row.last_updated_at,
+    createdAt: row.created_at,
+  };
+}
+
+type AudienceProfileRow = typeof audienceProfiles.$inferSelect;
+type StyleProfileRow = typeof styleProfiles.$inferSelect;
+
+/** Colonnes `_json` de listes de chaînes : décodées avec repli sur `[]`. */
+function decodeStringList(raw: string | null): string[] {
+  if (raw === null) return [];
+  const parsed = parseJsonUnknown(raw);
+  if (!parsed.ok || !Array.isArray(parsed.value)) return [];
+  return parsed.value.filter((item): item is string => typeof item === 'string');
+}
+
+function toAudienceProfile(row: AudienceProfileRow): AudienceProfileRecord {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    description: row.description,
+    painPoints: decodeStringList(row.pain_points_json),
+    goals: decodeStringList(row.goals_json),
+    objections: decodeStringList(row.objections_json),
+    knowledgeLevel: row.knowledge_level as AudienceKnowledgeLevel,
+    vocabulary: decodeStringList(row.vocabulary_json),
+    platforms: decodeStringList(row.platforms_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toStyleProfile(row: StyleProfileRow): StyleProfileRecord {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    scope: row.scope as StyleScope,
+    platform: row.platform,
+    tone: (row.tone ?? null) as StyleTone | null,
+    formality: row.formality,
+    sentenceLength: (row.sentence_length ?? null) as SentenceLength | null,
+    humorLevel: row.humor_level,
+    emojiLevel: row.emoji_level,
+    forbiddenWords: decodeStringList(row.forbidden_words_json),
+    signatureOpenings: decodeStringList(row.signature_openings_json),
+    signatureClosings: decodeStringList(row.signature_closings_json),
+    exampleParagraphs: decodeStringList(row.example_paragraphs_json),
+    derivedFromTexts: row.derived_from_texts,
+    confidence: row.confidence,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export interface ProjectMemoryStoreOptions {
   /** Horloge injectée : jamais de `Date.now()` implicite (docs/09 §1.1). */
   nowMs(): number;
@@ -185,6 +337,23 @@ export interface ProjectMemoryStoreImpl {
     patch(id: string, patch: ProjectFactPatchRecord): number;
     byId(id: string): ProjectFactRecord | undefined;
     list(filter: FactQueryFilter): ProjectFactRecord[];
+  };
+  skillFacts: {
+    insert(record: ProjectSkillFactRecord): void;
+    patch(id: string, patch: ProjectSkillFactPatchRecord): number;
+    byId(id: string): ProjectSkillFactRecord | undefined;
+    list(projectId: string): ProjectSkillFactRecord[];
+    byProjectAndSkill(projectId: string, skill: string): ProjectSkillFactRecord | undefined;
+  };
+  audienceProfiles: {
+    insert(record: AudienceProfileRecord): void;
+    byId(id: string): AudienceProfileRecord | undefined;
+    list(projectId: string): AudienceProfileRecord[];
+  };
+  styleProfiles: {
+    insert(record: StyleProfileRecord): void;
+    byId(id: string): StyleProfileRecord | undefined;
+    list(projectId: string): StyleProfileRecord[];
   };
   owner: {
     currentId(): string;
@@ -343,6 +512,144 @@ export function createProjectMemoryStore(
           .all()
           .map(toFact);
       },
+    },
+    skillFacts: {
+      insert: (record) => {
+        handle.db
+          .insert(projectSkillFacts)
+          .values({
+            id: record.id,
+            project_id: record.projectId,
+            skill: record.skill,
+            level: record.level,
+            evidence: record.evidence,
+            learned_how: record.learnedHow,
+            is_learning: record.isLearning,
+            learning_target: record.learningTarget,
+            confidence: record.confidence,
+            last_updated_at: record.lastUpdatedAt,
+            created_at: record.createdAt,
+          })
+          .run();
+      },
+      patch: (id, patch) => {
+        const set: Partial<typeof projectSkillFacts.$inferInsert> = {
+          last_updated_at: patch.lastUpdatedAt,
+        };
+        if (patch.level !== undefined) set.level = patch.level;
+        if (patch.evidence !== undefined) set.evidence = patch.evidence;
+        if (patch.learnedHow !== undefined) set.learned_how = patch.learnedHow;
+        if (patch.isLearning !== undefined) set.is_learning = patch.isLearning;
+        if (patch.learningTarget !== undefined) set.learning_target = patch.learningTarget;
+        if (patch.confidence !== undefined) set.confidence = patch.confidence;
+        return handle.db
+          .update(projectSkillFacts)
+          .set(set)
+          .where(eq(projectSkillFacts.id, id))
+          .run().changes;
+      },
+      byId: (id) => {
+        const row = handle.db
+          .select()
+          .from(projectSkillFacts)
+          .where(eq(projectSkillFacts.id, id))
+          .get();
+        return row ? toSkillFact(row) : undefined;
+      },
+      list: (projectId) =>
+        handle.db
+          .select()
+          .from(projectSkillFacts)
+          .where(eq(projectSkillFacts.project_id, projectId))
+          .orderBy(asc(projectSkillFacts.skill))
+          .all()
+          .map(toSkillFact),
+      byProjectAndSkill: (projectId, skill) => {
+        const row = handle.db
+          .select()
+          .from(projectSkillFacts)
+          .where(
+            and(eq(projectSkillFacts.project_id, projectId), eq(projectSkillFacts.skill, skill)),
+          )
+          .get();
+        return row ? toSkillFact(row) : undefined;
+      },
+    },
+    audienceProfiles: {
+      insert: (record) => {
+        handle.db
+          .insert(audienceProfiles)
+          .values({
+            id: record.id,
+            project_id: record.projectId,
+            name: record.name,
+            description: record.description,
+            pain_points_json: encodeJson(record.painPoints),
+            goals_json: encodeJson(record.goals),
+            objections_json: encodeJson(record.objections),
+            knowledge_level: record.knowledgeLevel,
+            vocabulary_json: encodeJson(record.vocabulary),
+            platforms_json: encodeJson(record.platforms),
+            created_at: record.createdAt,
+            updated_at: record.updatedAt,
+          })
+          .run();
+      },
+      byId: (id) => {
+        const row = handle.db
+          .select()
+          .from(audienceProfiles)
+          .where(eq(audienceProfiles.id, id))
+          .get();
+        return row ? toAudienceProfile(row) : undefined;
+      },
+      list: (projectId) =>
+        handle.db
+          .select()
+          .from(audienceProfiles)
+          .where(eq(audienceProfiles.project_id, projectId))
+          .orderBy(asc(audienceProfiles.created_at))
+          .all()
+          .map(toAudienceProfile),
+    },
+    styleProfiles: {
+      insert: (record) => {
+        handle.db
+          .insert(styleProfiles)
+          .values({
+            id: record.id,
+            project_id: record.projectId,
+            name: record.name,
+            scope: record.scope,
+            platform: record.platform,
+            tone: record.tone,
+            formality: record.formality,
+            sentence_length: record.sentenceLength,
+            humor_level: record.humorLevel,
+            emoji_level: record.emojiLevel,
+            forbidden_words_json: encodeJson(record.forbiddenWords),
+            signature_openings_json: encodeJson(record.signatureOpenings),
+            signature_closings_json: encodeJson(record.signatureClosings),
+            example_paragraphs_json: encodeJson(record.exampleParagraphs),
+            derived_from_texts: record.derivedFromTexts,
+            confidence: record.confidence,
+            created_at: record.createdAt,
+            updated_at: record.updatedAt,
+          })
+          .run();
+      },
+      byId: (id) => {
+        const row = handle.db.select().from(styleProfiles).where(eq(styleProfiles.id, id)).get();
+        return row ? toStyleProfile(row) : undefined;
+      },
+      list: (projectId) =>
+        handle.db
+          .select()
+          .from(styleProfiles)
+          .where(eq(styleProfiles.project_id, projectId))
+          .orderBy(asc(styleProfiles.created_at))
+          .all()
+          .map(toStyleProfile),
     },
     owner: { currentId: currentOwnerId },
     /**

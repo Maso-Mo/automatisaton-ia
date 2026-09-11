@@ -4,6 +4,7 @@ import { registerSecurity } from './plugins/security';
 import { registerSystemRoutes } from './routes/system';
 import { registerJobRoutes } from './routes/jobs';
 import { registerProjectRoutes } from './routes/projects';
+import { registerConversationRoutes } from './routes/conversations';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -25,7 +26,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 2 — mémoire des projets',
+    step: 'étape 3 — conversation et fiche maître',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -42,13 +43,28 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /projects/:id/facts/:factId/verification',
       'POST /projects/:id/facts/:factId/replacement',
       'GET /projects/:id/context',
+      'GET /projects/:id/brief',
       'GET /projects/vocabulary',
+      'GET /conversations',
+      'POST /conversations',
+      'GET /conversations/:id',
+      'GET /conversations/:id/messages',
+      'POST /conversations/:id/messages',
+      'POST /conversations/:id/messages/:messageId/proposals',
+      'POST /conversations/:id/close',
+      'POST /conversations/:id/reopen',
+      'POST /conversations/:id/brief',
+      'GET /briefs/:briefId',
+      'PATCH /briefs/:briefId',
+      'POST /briefs/:briefId/validation',
+      'GET /events/conversations/:id',
     ],
   }));
 
   registerSystemRoutes(app, context);
   registerJobRoutes(app, context);
   registerProjectRoutes(app, context);
+  registerConversationRoutes(app, context);
 
   return app;
 }

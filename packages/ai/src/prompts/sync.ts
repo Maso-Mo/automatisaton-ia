@@ -142,14 +142,58 @@ export function discoverPromptFiles(promptsDir: string): string[] {
 
 /** Contenu du prompt, en-tête retiré : c'est ce que reçoit le modèle. */
 export function readPromptBody(promptsDir: string, filePath: string): string {
+  return expandPromptIncludes(promptsDir, filePath, readRawBody(promptsDir, filePath));
+}
+
+/**
+ * Les prompts partagés s'incluent **explicitement** (docs/04 §6.1) :
+ *
+ * ```text
+ * @include _shared/rules-honesty.md
+ * ```
+ *
+ * Pourquoi une inclusion textuelle et non une variable : la règle reste lisible
+ * **dans** le fichier qui l'applique, et un `diff` montre le texte exact envoyé au
+ * modèle. Un prompt qui change de sens sans que le fichier change serait un piège.
+ */
+export const PROMPT_INCLUDE_PATTERN = /^[ \t]*@include[ \t]+(\S+)[ \t]*$/gm;
+
+export function expandPromptIncludes(
+  promptsDir: string,
+  filePath: string,
+  body: string,
+  seen: readonly string[] = [],
+): string {
+  return body.replace(PROMPT_INCLUDE_PATTERN, (_match: string, includePath: string) => {
+    const target = normalizeIncludePath(includePath);
+    if (seen.includes(target)) {
+      throw new ValidationError(
+        `Inclusion circulaire de prompt : ${[...seen, target].join(' → ')}`,
+        { code: 'PROMPT_INCLUDE_CYCLE', details: { filePath, target } },
+      );
+    }
+    const included = readRawBody(promptsDir, target);
+    return expandPromptIncludes(promptsDir, target, included, [...seen, target]);
+  });
+}
+
+/** Un chemin d'inclusion est **relatif** aux prompts : jamais absolu, jamais `..`. */
+function normalizeIncludePath(includePath: string): string {
+  const normalized = includePath.replace(/^\.\//, '').split(sep).join('/');
+  if (normalized.startsWith('/') || normalized.includes('..')) {
+    throw new ValidationError(
+      `Inclusion de prompt invalide : ${includePath} (chemin relatif attendu, sans « .. »)`,
+      { code: 'PROMPT_INCLUDE_INVALID', details: { includePath } },
+    );
+  }
+  return normalized;
+}
+
+/** Corps brut d'un fichier : l'en-tête éventuel est retiré, le reste est intact. */
+function readRawBody(promptsDir: string, filePath: string): string {
   const content = readFileSync(join(promptsDir, filePath), 'utf8');
   const parsed = parsePromptFile(filePath, content);
-  if (!parsed) {
-    throw new ValidationError(`Prompt sans en-tête exploitable : ${filePath}`, {
-      code: 'PROMPT_HEADER_INVALID',
-    });
-  }
-  return parsed.body;
+  return parsed ? parsed.body : content.trim();
 }
 
 export interface SyncPromptsParams {

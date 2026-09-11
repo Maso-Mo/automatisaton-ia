@@ -37,7 +37,7 @@ describe('API de l’étape 1', () => {
     // Le libellé d'étape est une **affirmation produit** : il nomme ce que
     // l'application sait faire aujourd'hui. Ce test le fige pour qu'il ne
     // régresse pas et n'annonce jamais une étape inexistante.
-    expect(body.step).toBe('étape 2 — mémoire des projets');
+    expect(body.step).toBe('étape 3 — conversation et fiche maître');
     expect(body.endpoints).toContain('GET /system/health');
   });
 
