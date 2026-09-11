@@ -1,4 +1,13 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  type AnySQLiteColumn,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 import { users } from './users';
 
 /**
@@ -51,7 +60,19 @@ export const projectGoals = sqliteTable(
   (table) => [index('idx_project_goals_project').on(table.project_id, table.status)],
 );
 
-/** Faits durables du projet : expériences, chiffres, opinions, échecs. */
+/**
+ * Faits durables du projet : expériences, chiffres, opinions, échecs — **et**,
+ * depuis l'étape 2, la connaissance du projet elle-même (motivation, problème
+ * traité, stack, architecture, décisions, difficultés, erreurs, solutions,
+ * apprentissages, état actuel, prochaines étapes, URLs, notes — docs/10 §4.2).
+ *
+ * Trois garanties sont portées par la **base** et non par le code (docs/03 §15.1) :
+ * 1. un fait `verified` porte toujours une date de confirmation (`verified_at`) ;
+ * 2. `verified_by_user` (colonne documentée) ne peut pas diverger de
+ *    `verification_status` ;
+ * 3. `superseded` ⇔ un successeur est enregistré : un fait remplacé ne peut pas
+ *    perdre la trace de ce qui le remplace.
+ */
 export const projectFacts = sqliteTable(
   'project_facts',
   {
@@ -59,25 +80,58 @@ export const projectFacts = sqliteTable(
     project_id: text()
       .notNull()
       .references(() => projects.id),
-    category: text().notNull(), // 'experience'|'chiffre'|'opinion'|'projet'|'echec'|'ressource'|'contrainte'
+    category: text().notNull(), // 'experience'|'chiffre'|…|'url'|'note' (voir FACT_CATEGORIES)
     statement: text().notNull(),
     detail: text(),
-    source: text().notNull(), // 'conversation'|'user_edit'|'user_import'
-    // La contrainte vers `messages` (étape 2) est ajoutée par la migration qui crée
+    source: text().notNull(), // 'user_input'|'user_edit'|'user_import'|'conversation'|'ai_proposal'
+    // La contrainte vers `messages` (étape 3) est ajoutée par la migration qui crée
     // cette table : SQLite ne sait pas ajouter une FK sans reconstruire la table.
     source_message_id: text(),
     verified_by_user: integer({ mode: 'boolean' }).notNull().default(false),
+    /**
+     * `proposed` | `user_provided` | `verified` | `uncertain` | `obsolete` | `superseded`.
+     * Distinct de `verified_by_user` (booléen documenté, conservé) : quatre états
+     * ne tiennent pas dans un booléen (docs/10 §4.2).
+     */
+    verification_status: text().notNull().default('user_provided'),
+    /** Raison lisible d'un état `uncertain`, `obsolete` ou `superseded`. */
+    verification_note: text(),
+    /** Date de la confirmation humaine : renseignée ⇔ `verified`. */
+    verified_at: integer(),
+    /** Fait que celui-ci remplace (chaîne d'historique explicite). */
+    supersedes_fact_id: text().references((): AnySQLiteColumn => projectFacts.id),
+    /** Fait qui remplace celui-ci : renseigné ⇔ `verification_status = 'superseded'`. */
+    superseded_by_fact_id: text().references((): AnySQLiteColumn => projectFacts.id),
+    superseded_at: integer(),
     importance: integer().notNull().default(3), // 1–5
     used_count: integer().notNull().default(0),
     last_used_at: integer(),
     created_at: integer().notNull(),
     updated_at: integer().notNull(),
+    /** Jamais utilisé pour la mémoire de projet : un fait ne se supprime pas (docs/03 §16.1). */
     deleted_at: integer(),
   },
   (table) => [
     index('idx_facts_project').on(table.project_id, table.deleted_at),
     index('idx_facts_category').on(table.project_id, table.category),
     index('idx_facts_verified').on(table.project_id, table.verified_by_user),
+    // Requête réelle : « les faits d'un projet, par état de vérification » (API étape 2).
+    index('idx_facts_verification').on(table.project_id, table.verification_status),
+    // Un fait ne peut être remplacé qu'une fois : sinon l'historique se contredit.
+    uniqueIndex('uq_facts_supersedes').on(table.supersedes_fact_id),
+    check(
+      'chk_facts_verified_at',
+      sql`(${table.verification_status} <> 'verified') OR (${table.verified_at} IS NOT NULL)`,
+    ),
+    check(
+      'chk_facts_verified_by_user',
+      sql`(${table.verified_by_user} = 1) = (${table.verification_status} = 'verified')`,
+    ),
+    check(
+      'chk_facts_supersede_link',
+      sql`(${table.verification_status} = 'superseded') = (${table.superseded_by_fact_id} IS NOT NULL)`,
+    ),
+    check('chk_facts_importance', sql`${table.importance} BETWEEN 1 AND 5`),
   ],
 );
 

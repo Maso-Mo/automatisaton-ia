@@ -18,9 +18,13 @@ export interface MigrationReport {
 }
 
 /** Applique les migrations non appliquées. Idempotent. */
-export function applyMigrations(handle: DatabaseHandle): MigrationReport {
+export function applyMigrations(
+  handle: DatabaseHandle,
+  /** Dossier de migrations alternatif : sert au test de migration ascendante. */
+  options: { migrationsFolder?: string } = {},
+): MigrationReport {
   const before = appliedMigrationCount(handle);
-  migrate(handle.db, { migrationsFolder: MIGRATIONS_FOLDER });
+  migrate(handle.db, { migrationsFolder: options.migrationsFolder ?? MIGRATIONS_FOLDER });
   const after = appliedMigrationCount(handle);
   return { applied: after - before, total: after };
 }

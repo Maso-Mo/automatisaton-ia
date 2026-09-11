@@ -3,6 +3,7 @@ import { registerErrorHandler } from './plugins/errors';
 import { registerSecurity } from './plugins/security';
 import { registerSystemRoutes } from './routes/system';
 import { registerJobRoutes } from './routes/jobs';
+import { registerProjectRoutes } from './routes/projects';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -24,12 +25,30 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 1 — fondations',
-    endpoints: ['GET /system/health', 'GET /jobs', 'GET /jobs/:id', 'GET /events/jobs/:id'],
+    step: 'étape 2 — mémoire des projets',
+    endpoints: [
+      'GET /system/health',
+      'GET /jobs',
+      'GET /jobs/:id',
+      'GET /events/jobs/:id',
+      'GET /projects',
+      'POST /projects',
+      'GET /projects/:id',
+      'PATCH /projects/:id',
+      'POST /projects/:id/archive',
+      'GET /projects/:id/facts',
+      'POST /projects/:id/facts',
+      'PATCH /projects/:id/facts/:factId',
+      'POST /projects/:id/facts/:factId/verification',
+      'POST /projects/:id/facts/:factId/replacement',
+      'GET /projects/:id/context',
+      'GET /projects/vocabulary',
+    ],
   }));
 
   registerSystemRoutes(app, context);
   registerJobRoutes(app, context);
+  registerProjectRoutes(app, context);
 
   return app;
 }

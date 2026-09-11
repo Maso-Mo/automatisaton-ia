@@ -1,4 +1,11 @@
-/** Client REST typé de l'écran de diagnostic. */
+/**
+ * Client REST typé de l'écran de diagnostic **et** de la mémoire des projets.
+ *
+ * `apps/web` ne dépend que de `apps/api` (docs/02 §4) : aucun import de paquet
+ * du domaine, aucune connaissance de la base. Le vocabulaire (catégories,
+ * états, libellés) est **servi par l'API** — c'est ce qui empêche l'interface
+ * d'inventer une valeur que le domaine refuse.
+ */
 export type CheckStatus = 'ok' | 'warn' | 'error';
 
 export interface HealthCheck {
@@ -73,15 +80,137 @@ export interface JobsSummary {
   }>;
 }
 
+// --- Mémoire des projets (étape 2) -----------------------------------------
+
+export interface VocabularyOption {
+  value: string;
+  label: string;
+  /** États suivants autorisés par le domaine (affichés, jamais devinés). */
+  next?: string[];
+}
+
+export interface ProjectsVocabulary {
+  projectStatuses: VocabularyOption[];
+  factCategories: VocabularyOption[];
+  factSources: VocabularyOption[];
+  factVerificationStatuses: VocabularyOption[];
+  knowledgeCategories: string[];
+  limits: {
+    factStatementMaxLength: number;
+    factDetailMaxLength: number;
+    recencyHalfLifeDays: number;
+  };
+}
+
+export interface ProjectView {
+  id: string;
+  name: string;
+  slug: string;
+  positioning: string | null;
+  status: string;
+  targetGoal: string | null;
+  startDate: number | null;
+  language: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+}
+
+export interface ProjectFactView {
+  id: string;
+  projectId: string;
+  category: string;
+  statement: string;
+  detail: string | null;
+  source: string;
+  verificationStatus: string;
+  verificationNote: string | null;
+  verifiedAt: number | null;
+  importance: number;
+  usedCount: number;
+  supersedesFactId: string | null;
+  supersededByFactId: string | null;
+  supersededAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FactSummary {
+  total: number;
+  byStatus: Record<string, number>;
+  byCategory: Record<string, number>;
+  trusted: number;
+}
+
+export interface ProjectContextView {
+  projectId: string;
+  projectName: string;
+  generatedAt: number;
+  facts: Array<{ fact: ProjectFactView; score: number }>;
+  excluded: { unverified: number; inactive: number; filtered: number };
+  missingCategories: string[];
+}
+
+export interface ProjectDetail {
+  project: ProjectView;
+  summary: FactSummary;
+  context: ProjectContextView;
+}
+
+export interface ProjectInput {
+  name: string;
+  positioning?: string | null;
+  targetGoal?: string | null;
+  description?: string | null;
+}
+
+export interface FactInput {
+  category: string;
+  statement: string;
+  detail?: string | null;
+  importance?: number;
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`/api${path}`, { headers: { accept: 'application/json' } });
+  return request<T>(path, { method: 'GET' });
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    ...init,
+    headers: {
+      accept: 'application/json',
+      ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...init.headers,
+    },
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
-      error?: { message?: string };
+      error?: { message?: string; code?: string };
     } | null;
-    throw new Error(body?.error?.message ?? `Requête refusée (${response.status})`);
+    const suffix = body?.error?.code ? ` (${body.error.code})` : '';
+    throw new Error((body?.error?.message ?? `Requête refusée (${response.status})`) + suffix);
   }
   return (await response.json()) as T;
+}
+
+/** Sérialise un corps JSON, en retirant les valeurs `undefined`. */
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+}
+
+function patchJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+function queryString(params: Record<string, string | number | boolean | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === false || value === '') continue;
+    search.set(key, String(value));
+  }
+  const rendered = search.toString();
+  return rendered.length > 0 ? `?${rendered}` : '';
 }
 
 export const api = {
@@ -93,6 +222,64 @@ export const api = {
       job: PublicJob;
       events: Array<{ sequence: number; level: string; step: string | null; message: string }>;
     }>(`/jobs/${id}`),
+
+  // --- Mémoire des projets (étape 2) --------------------------------------
+  projectsVocabulary: () => getJson<ProjectsVocabulary>('/projects/vocabulary'),
+  projects: (params: { includeArchived?: boolean; status?: string } = {}) =>
+    getJson<{ projects: ProjectView[] }>(`/projects${queryString(params)}`),
+  project: (id: string) => getJson<ProjectDetail>('/projects/' + encodeURIComponent(id)),
+  createProject: (body: ProjectInput) => postJson<{ project: ProjectView }>('/projects', body),
+  updateProject: (id: string, body: Partial<ProjectInput> & { status?: string }) =>
+    patchJson<{ project: ProjectView }>(`/projects/${encodeURIComponent(id)}`, body),
+  archiveProject: (id: string) =>
+    postJson<{ project: ProjectView }>(`/projects/${encodeURIComponent(id)}/archive`, {}),
+  projectFacts: (
+    id: string,
+    params: {
+      category?: string;
+      status?: string;
+      since?: number;
+      until?: number;
+      includeInactive?: boolean;
+      limit?: number;
+    } = {},
+  ) =>
+    getJson<{ facts: ProjectFactView[]; summary: FactSummary }>(
+      `/projects/${encodeURIComponent(id)}/facts${queryString(params)}`,
+    ),
+  addFact: (id: string, body: FactInput) =>
+    postJson<{ fact: ProjectFactView }>(`/projects/${encodeURIComponent(id)}/facts`, body),
+  updateFact: (id: string, factId: string, body: Partial<FactInput>) =>
+    patchJson<{ fact: ProjectFactView }>(
+      `/projects/${encodeURIComponent(id)}/facts/${encodeURIComponent(factId)}`,
+      body,
+    ),
+  setFactVerification: (
+    id: string,
+    factId: string,
+    body: { status: string; note?: string | null },
+  ) =>
+    postJson<{ fact: ProjectFactView }>(
+      `/projects/${encodeURIComponent(id)}/facts/${encodeURIComponent(factId)}/verification`,
+      body,
+    ),
+  replaceFact: (id: string, factId: string, body: FactInput & { note?: string | null }) =>
+    postJson<{ superseded: ProjectFactView; replacement: ProjectFactView }>(
+      `/projects/${encodeURIComponent(id)}/facts/${encodeURIComponent(factId)}/replacement`,
+      body,
+    ),
+  projectContext: (
+    id: string,
+    params: {
+      category?: string;
+      status?: string;
+      includeUnverified?: boolean;
+      limit?: number;
+    } = {},
+  ) =>
+    getJson<ProjectContextView>(
+      `/projects/${encodeURIComponent(id)}/context${queryString(params)}`,
+    ),
 };
 
 export function formatUsd(microUsd: number): string {

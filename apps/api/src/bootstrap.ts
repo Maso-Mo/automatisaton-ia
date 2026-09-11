@@ -1,6 +1,7 @@
 import {
   applyMigrations,
   countJobsByStatus,
+  createProjectMemoryStore,
   getJob,
   isMigrated,
   isWalEnabled,
@@ -26,7 +27,12 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
-import { getSystemHealth, type SystemHealth, type SystemHealthPorts } from '@aia/core';
+import {
+  getSystemHealth,
+  type ProjectMemoryPorts,
+  type SystemHealth,
+  type SystemHealthPorts,
+} from '@aia/core';
 import { createSystemClock, uuidv7, type Clock } from '@aia/shared';
 
 const APP_VERSION = '0.1.0';
@@ -34,9 +40,10 @@ const STARTED_AT = Date.now();
 
 /**
  * Composition root de l'API. Contrairement au worker, l'API **ne construit ni
- * file exécutable ni registry de jobs** : elle lit l'état et sert le diagnostic.
- * Aucune route d'action n'existe à l'étape 1 — les routes métier arrivent avec
- * les fonctionnalités qui les exigent (docs/10 §4.1, « Interdits »).
+ * file exécutable ni registry de jobs** : elle lit l'état, sert le diagnostic
+ * et, depuis l'étape 2, la mémoire des projets (lecture **et** écriture).
+ * Aucune autre route d'action n'existe : chaque fonctionnalité arrive avec
+ * l'étape qui la spécifie (docs/10 §4.1, §4.2).
  */
 export interface ApiContext {
   config: Config;
@@ -45,6 +52,8 @@ export interface ApiContext {
   clock: Clock;
   budget: BudgetPort;
   startedAtMs: number;
+  /** Ports du domaine « mémoire des projets » — c'est `core` qui décide. */
+  memory: ProjectMemoryPorts;
   health(): SystemHealth;
   jobs(filter?: { statuses?: JobRow['status'][]; limit?: number }): JobRow[];
   job(id: string): JobRow | undefined;
@@ -151,6 +160,17 @@ export function buildApi(
     logger.warn('prompt system/cost_probe absent : la sonde de coût ne pourra pas s’exécuter');
   }
 
+  /**
+   * Ports du domaine : `core` ne connaît ni SQLite ni Drizzle. Le paquet de
+   * persistance rend des objets **structurellement** identiques aux types du
+   * domaine (mêmes noms de champs), ce que TypeScript vérifie ici même.
+   */
+  const memory: ProjectMemoryPorts = {
+    store: createProjectMemoryStore(handle, { nowMs: () => clock.nowMs() }),
+    clock,
+    newId: () => uuidv7(clock.nowMs()),
+  };
+
   return {
     config,
     handle,
@@ -158,6 +178,7 @@ export function buildApi(
     clock,
     budget,
     startedAtMs: STARTED_AT,
+    memory,
     health: () => getSystemHealth(ports),
     jobs: (filter = {}) => listJobs(handle, filter),
     job: (id) => getJob(handle, id),

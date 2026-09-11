@@ -16,6 +16,9 @@ importers:
       '@aia/config':
         specifier: workspace:*
         version: link:packages/config
+      '@aia/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@aia/database':
         specifier: workspace:*
         version: link:packages/database
@@ -203,6 +206,9 @@ importers:
       '@aia/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: ^4.6.2
+        version: 4.6.2
 
   packages/database:
     dependencies:

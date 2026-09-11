@@ -59,7 +59,17 @@ export const PROJECT_STATUSES = ['discovery', 'active', 'paused', 'archived'] as
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const projectStatusSchema = z.enum(PROJECT_STATUSES);
 
+/**
+ * Catégories de faits (docs/03 §6.1). Deux familles, volontairement séparées :
+ *
+ * 1. **biographie et vécu** — ce qui rend un contenu personnel (étapes 3 à 8) ;
+ * 2. **connaissance du projet** — ce que l'utilisateur sait de son propre projet
+ *    (étape 2). Stoker ces informations en faits typés plutôt qu'en un seul champ
+ *    de texte libre permet de les filtrer, de les dater et de les remplacer
+ *    (docs/03 §2.5 : « on ne requête jamais dans du JSON »).
+ */
 export const FACT_CATEGORIES = [
+  // 1. Biographie et vécu
   'experience',
   'chiffre',
   'opinion',
@@ -67,9 +77,124 @@ export const FACT_CATEGORIES = [
   'echec',
   'ressource',
   'contrainte',
+  // 2. Connaissance du projet (étape 2)
+  'description',
+  'motivation',
+  'probleme',
+  'stack',
+  'technologie',
+  'architecture',
+  'fonctionnalite',
+  'decision',
+  'difficulte',
+  'erreur',
+  'solution',
+  'apprentissage',
+  'etat_actuel',
+  'prochaine_etape',
+  'url',
+  'note',
 ] as const;
 export type FactCategory = (typeof FACT_CATEGORIES)[number];
 export const factCategorySchema = z.enum(FACT_CATEGORIES);
+
+/**
+ * État de vérification d'un fait (docs/03 §6.1, docs/05 §3). `verified_by_user`
+ * ne suffit pas : il faut distinguer « l'IA l'a proposé », « l'utilisateur l'a
+ * saisi », « l'utilisateur l'a confirmé », « c'est incertain » et « c'est
+ * remplacé » — sinon un fait faux et un fait confirmé sont indiscernables.
+ */
+export const FACT_VERIFICATION_STATUSES = [
+  'proposed',
+  'user_provided',
+  'verified',
+  'uncertain',
+  'obsolete',
+  'superseded',
+] as const;
+export type FactVerificationStatus = (typeof FACT_VERIFICATION_STATUSES)[number];
+export const factVerificationStatusSchema = z.enum(FACT_VERIFICATION_STATUSES);
+
+/** Origine d'un fait. `ai_proposal` n'est **jamais** une source suffisante. */
+export const FACT_SOURCES = [
+  'user_input',
+  'user_edit',
+  'user_import',
+  'conversation',
+  'ai_proposal',
+] as const;
+export type FactSource = (typeof FACT_SOURCES)[number];
+export const factSourceSchema = z.enum(FACT_SOURCES);
+
+/** Statuts qui autorisent l'injection d'un fait dans un prompt (docs/03 §6.1). */
+export const TRUSTED_FACT_STATUSES = [
+  'verified',
+] as const satisfies readonly FactVerificationStatus[];
+
+/** Statuts d'un fait encore « vivant » : ni obsolète, ni remplacé. */
+export const ACTIVE_FACT_STATUSES = [
+  'proposed',
+  'user_provided',
+  'verified',
+  'uncertain',
+] as const satisfies readonly FactVerificationStatus[];
+
+/**
+ * Libellés affichés par l'interface. Ils vivent ici, à côté des valeurs, pour
+ * qu'une valeur ajoutée sans libellé soit une **erreur de compilation** — et non
+ * un écran vide découvert par l'utilisateur (`labels.test.ts`).
+ */
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  discovery: 'Découverte',
+  active: 'Actif',
+  paused: 'En pause',
+  archived: 'Archivé',
+};
+
+export const FACT_CATEGORY_LABELS: Record<FactCategory, string> = {
+  // Biographie et vécu
+  experience: 'Expérience vécue',
+  chiffre: 'Chiffre',
+  opinion: 'Opinion',
+  projet: 'Projet réalisé',
+  echec: 'Échec',
+  ressource: 'Ressource',
+  contrainte: 'Contrainte',
+  // Connaissance du projet
+  description: 'Description',
+  motivation: 'Motivation',
+  probleme: 'Problème traité',
+  stack: 'Stack technique',
+  technologie: 'Technologie',
+  architecture: 'Architecture connue',
+  fonctionnalite: 'Fonctionnalité',
+  decision: 'Décision technique',
+  difficulte: 'Difficulté',
+  erreur: 'Erreur',
+  solution: 'Solution',
+  apprentissage: 'Apprentissage',
+  etat_actuel: 'État actuel',
+  prochaine_etape: 'Prochaine étape',
+  url: 'URL',
+  note: 'Note',
+};
+
+export const FACT_VERIFICATION_STATUS_LABELS: Record<FactVerificationStatus, string> = {
+  proposed: 'Proposé (non validé)',
+  user_provided: 'Fourni par vous',
+  verified: 'Confirmé par vous',
+  uncertain: 'Incertain',
+  obsolete: 'Obsolète',
+  superseded: 'Remplacé',
+};
+
+export const FACT_SOURCE_LABELS: Record<FactSource, string> = {
+  user_input: 'Saisie par vous',
+  user_edit: 'Corrigé par vous',
+  user_import: 'Importé par vous',
+  conversation: 'Extrait d’une conversation',
+  ai_proposal: 'Proposé par l’IA',
+};
 
 export const SKILL_LEVELS = ['debutant', 'intermediaire', 'avance', 'expert'] as const;
 export type SkillLevel = (typeof SKILL_LEVELS)[number];
@@ -181,6 +306,11 @@ export const ENUM_REGISTRY = {
   ERROR_CATEGORIES: { values: ERROR_CATEGORIES, schema: errorCategorySchema },
   PROJECT_STATUSES: { values: PROJECT_STATUSES, schema: projectStatusSchema },
   FACT_CATEGORIES: { values: FACT_CATEGORIES, schema: factCategorySchema },
+  FACT_VERIFICATION_STATUSES: {
+    values: FACT_VERIFICATION_STATUSES,
+    schema: factVerificationStatusSchema,
+  },
+  FACT_SOURCES: { values: FACT_SOURCES, schema: factSourceSchema },
   SKILL_LEVELS: { values: SKILL_LEVELS, schema: skillLevelSchema },
   SKILL_LEARNED_HOW: { values: SKILL_LEARNED_HOW, schema: skillLearnedHowSchema },
   STYLE_SCOPES: { values: STYLE_SCOPES, schema: styleScopeSchema },

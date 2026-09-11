@@ -8,6 +8,13 @@
       "when": 1789080881681,
       "tag": "0000_clumsy_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789085031566,
+      "tag": "0001_cold_scourge",
+      "breakpoints": true
     }
   ]
 }
