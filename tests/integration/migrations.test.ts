@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  REQUIRED_TABLE_NAMES,
   STEP_ONE_TABLE_NAMES,
+  STEP_THREE_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
+  isMigrated,
   listTables,
+  missingTables,
 } from '@aia/database';
 import { decodeJson, uuidv7 } from '@aia/shared';
 import { createTestContext, TEST_NOW, type TestContext } from '../support/harness';
@@ -20,12 +24,32 @@ afterEach(() => {
 });
 
 describe('migrations et contraintes de la base (docs/03 §15)', () => {
-  it('crée les 13 tables de l’étape 1 depuis une base vide', () => {
+  it('crée toutes les tables attendues depuis une base vide', () => {
     const tables = listTables(context.handle);
-    for (const expected of STEP_ONE_TABLE_NAMES) {
+    for (const expected of REQUIRED_TABLE_NAMES) {
       expect(tables, `table attendue : ${expected}`).toContain(expected);
     }
+    // La liste vérifiée par l'amorçage doit couvrir **toutes** les étapes : une
+    // table oubliée ici serait une base acceptée au démarrage puis cassée à la
+    // première requête.
+    expect(REQUIRED_TABLE_NAMES).toEqual([...STEP_ONE_TABLE_NAMES, ...STEP_THREE_TABLE_NAMES]);
+    expect(STEP_THREE_TABLE_NAMES).toEqual([
+      'conversations',
+      'messages',
+      'conversation_summaries',
+      'master_briefs',
+    ]);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
+  });
+
+  it('nomme les tables manquantes au lieu de dire « schéma incomplet »', () => {
+    expect(missingTables(context.handle, REQUIRED_TABLE_NAMES)).toEqual([]);
+    expect(isMigrated(context.handle, REQUIRED_TABLE_NAMES)).toBe(true);
+
+    context.handle.sqlite.exec('drop table conversation_summaries');
+
+    expect(missingTables(context.handle, REQUIRED_TABLE_NAMES)).toEqual(['conversation_summaries']);
+    expect(isMigrated(context.handle, REQUIRED_TABLE_NAMES)).toBe(false);
   });
 
   it('est idempotent : réappliquer n’applique rien', () => {

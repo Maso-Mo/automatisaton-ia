@@ -28,7 +28,7 @@ function makeApi() {
   return { api, app, stack: createNoopStack(context) };
 }
 
-describe('API de l’étape 1', () => {
+describe('API : racine, diagnostic, jobs et flux SSE', () => {
   it('décrit le service sur la racine', async () => {
     const { app } = makeApi();
     const response = await app.inject({ method: 'GET', url: '/' });
@@ -150,5 +150,21 @@ describe('API de l’étape 1', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().error.category).toBe('validation');
+  });
+});
+
+describe('amorçage : la base doit contenir les tables de l’application', () => {
+  it('refuse de démarrer si une table de conversation manque, et la nomme', () => {
+    const ctx = createTestContext();
+    context = ctx;
+    // On retire une table **feuille** (aucune autre table ne la référence) : le
+    // scénario visé est une base où une migration a été perdue, pas un jeu de
+    // données incohérent. Sans cette garde, l'API démarrerait et échouerait à la
+    // première requête de conversation, avec une erreur SQL incompréhensible.
+    ctx.handle.sqlite.exec('drop table conversation_summaries');
+
+    expect(() => buildApi({ config: ctx.config, logger: ctx.logger, clock: ctx.clock })).toThrow(
+      /conversation_summaries/,
+    );
   });
 });

@@ -145,7 +145,7 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log('Vérification de l’environnement — étape 1\n');
+  console.log('Vérification de l’environnement local\n');
   for (const line of lines) {
     console.log(`${line.icon} ${line.label.padEnd(16)} ${line.detail}`);
   }

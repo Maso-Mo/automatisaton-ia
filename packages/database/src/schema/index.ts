@@ -1,5 +1,6 @@
 /**
- * Schéma complet de l'étape 1 : les **13 tables** listées dans docs/10 §4.1.
+ * Schéma complet de la base : les **13 tables** de l'étape 1 (docs/10 §4.1) et
+ * les **4 tables** de l'étape 3 (conversation et fiche maître, docs/03 §7 et §8.1).
  *
  * Règle « la table d'abord, le pipeline ensuite » (docs/10 §1.3) : une table est
  * créée quand son domaine est modélisé, même si le pipeline qui la remplit
@@ -62,3 +63,18 @@ export const STEP_THREE_TABLES = [
 export const STEP_THREE_TABLE_NAMES: readonly string[] = STEP_THREE_TABLES.map((table) =>
   getTableName(table),
 );
+
+/**
+ * **Toutes** les tables attendues par l'application à son état actuel. C'est
+ * cette liste — et jamais un nombre écrit en dur — que vérifient l'amorçage de
+ * l'API, celui du worker et le diagnostic : une base à laquelle il manque une
+ * table de conversation doit être refusée **au démarrage**, avec le nom de la
+ * table manquante, pas par une erreur SQL à la première requête.
+ *
+ * Elle grandit à chaque étape : ajouter les tables d'une nouvelle étape ici est
+ * la dernière ligne à écrire avant de livrer.
+ */
+export const REQUIRED_TABLE_NAMES: readonly string[] = [
+  ...STEP_ONE_TABLE_NAMES,
+  ...STEP_THREE_TABLE_NAMES,
+];

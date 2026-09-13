@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { uuidv7, createSystemClock, encodeJson } from '@aia/shared';
 import {
-  STEP_ONE_TABLE_NAMES,
+  REQUIRED_TABLE_NAMES,
   applyMigrations,
   insertJob,
   insertLlmCall,
   listTables,
+  missingTables,
   openDatabase,
   setSetting,
   type DatabaseHandle,
@@ -18,7 +19,7 @@ import {
  * CI sur une copie de base peuplée de données de test »).
  *
  * Trois contrôles, dans cet ordre :
- * 1. base **vide** → appliquer toutes les migrations → les 13 tables existent ;
+ * 1. base **vide** → appliquer toutes les migrations → les tables attendues existent ;
  * 2. base **peuplée** → réappliquer → rien de perdu, rien de cassé ;
  * 3. réapplication → **0 migration** appliquée (idempotence).
  */
@@ -102,11 +103,13 @@ function main(): void {
   withTempDatabase((handle) => {
     const first = applyMigrations(handle);
     const tables = new Set(listTables(handle));
-    const missing = STEP_ONE_TABLE_NAMES.filter((table) => !tables.has(table));
+    const missing = missingTables(handle, REQUIRED_TABLE_NAMES);
     check(
       'base vide → migrations',
       missing.length === 0,
-      `${first.applied} migration(s) appliquée(s), ${tables.size} tables`,
+      missing.length > 0
+        ? `${missing.length} table(s) manquante(s) : ${missing.join(', ')}`
+        : `${first.applied} migration(s) appliquée(s), ${tables.size} tables, les ${REQUIRED_TABLE_NAMES.length} attendues présentes`,
     );
 
     seed(handle);

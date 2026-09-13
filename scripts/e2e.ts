@@ -1,10 +1,11 @@
 /**
  * Parcours de bout en bout (E2E).
  *
- * **Aucun parcours n'existe à l'étape 1**, et c'est exactement le périmètre
- * voulu : les 6 parcours de docs/09 §2 sont des parcours *utilisateur* (parler de
- * son projet, générer un brouillon, valider, publier). Ils arrivent avec les
- * fonctionnalités correspondantes — le premier d'entre eux à l'étape 2.
+ * **Aucun parcours n'est encore automatisé**, et c'est le périmètre voulu : les
+ * 6 parcours de docs/09 §11 sont des parcours *utilisateur* complets (parler de
+ * son projet, générer un brouillon, valider, publier). Un E2E n'a de valeur que
+ * le jour où la chaîne qu'il traverse existe **entièrement** ; l'écrire avant
+ * produirait un test incapable de passer, donc un test qu'on désactive.
  *
  * Playwright n'est donc pas encore installé (docs/09 §3 : quatre outils, et
  * seulement quand ils servent). Ce script échoue **bruyamment** dès qu'un dossier
@@ -31,7 +32,7 @@ if (parcours.length > 0) {
 }
 
 console.log(
-  'ℹ️  Aucun parcours E2E à l’étape 1 — les 6 parcours de docs/09 §2 arrivent à partir de l’étape 2.',
+  'ℹ️  Aucun parcours E2E automatisé — les 6 parcours de docs/09 §11 sont décrits, aucun n’est encore complet.',
 );
 console.log(
   '   Cette étape est couverte par : unitaires (packages/*), intégration (tests/integration),',

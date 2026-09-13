@@ -1,9 +1,9 @@
 import { hostname } from 'node:os';
 import {
   applyMigrations,
-  isMigrated,
+  missingTables,
   openDatabase,
-  STEP_ONE_TABLE_NAMES,
+  REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
 import { createBudgetPort, type BudgetPort } from '@aia/analytics';
@@ -61,10 +61,11 @@ export function buildWorker(
     'migrations de base vérifiées',
   );
 
-  if (!isMigrated(handle, STEP_ONE_TABLE_NAMES)) {
+  const missing = missingTables(handle, REQUIRED_TABLE_NAMES);
+  if (missing.length > 0) {
     handle.close();
     throw new Error(
-      'Schéma incomplet : la base ne contient pas les 13 tables de l’étape 1. Lancer « pnpm db:migrate ».',
+      `Schéma incomplet : ${missing.length} table(s) manquante(s) sur ${REQUIRED_TABLE_NAMES.length} (${missing.join(', ')}). Lancer « pnpm db:migrate ».`,
     );
   }
 

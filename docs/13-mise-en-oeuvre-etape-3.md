@@ -117,4 +117,73 @@ qui, n'étant jamais terminé par le serveur, ne se teste pas par `inject()`.
    `null` dans les tests à fournisseur scripté — la colonne est une clé étrangère, et
    un identifiant factice serait un mensonge.
 
+---
+
+## 7. Audit après livraison : ce que la relecture a trouvé
+
+Le code a été relu après le premier passage, en cherchant explicitement les endroits où
+l'étape 3 **aurait dû** toucher l'existant sans que rien ne le rappelle. Deux catégories
+de résidus ont été trouvées, et une seule était grave.
+
+### 7.1 Un vrai défaut : la garde de démarrage ignorait les tables de l'étape 3
+
+L'étape 3 a ajouté **quatre tables** (`conversations`, `messages`, `conversation_summaries`,
+`master_briefs`) et n'a pas étendu la garde qui décide si l'application a le droit de
+démarrer :
+
+| Endroit | Avant | Conséquence |
+|---|---|---|
+| `apps/api/src/bootstrap.ts` | `isMigrated(handle, STEP_ONE_TABLE_NAMES)` | une base sans `conversations` **démarrait** |
+| `apps/worker/src/bootstrap.ts` | idem | idem |
+| `apps/api/src/bootstrap.ts` (`expectedTables`) | `STEP_ONE_TABLE_NAMES` | le diagnostic affichait « schéma complet » alors que la conversation était cassée |
+| `packages/database/src/schema/index.ts` | `STEP_THREE_TABLE_NAMES` **exportée et jamais utilisée** | le manque ne se voyait nulle part : ni erreur, ni `eslint`, ni test |
+
+Le symptôme réel n'aurait pas été un message clair mais une **erreur SQL au premier message
+de conversation** (« no such table: conversations »), c'est-à-dire le contraire de
+`docs/08 §6` (« le message d'échec est compréhensible et propose une action »).
+
+**Correction.** Une seule liste, construite à partir des deux : `REQUIRED_TABLE_NAMES`, et
+une fonction `missingTables(handle, attendues)` qui **nomme** ce qui manque —
+`isMigrated` reste, réécrit en une ligne au-dessus d'elle. Les deux amorçages et le
+diagnostic l'utilisent ; le nombre « 13 » disparaît des messages : il avait déjà menti une
+fois, il ne pourra plus.
+
+Deux tests le figent :
+
+- `tests/integration/migrations.test.ts` — `missingTables` renvoie exactement
+  `['conversation_summaries']` après suppression de cette table, et vérifie que
+  `REQUIRED_TABLE_NAMES` couvre bien les deux étapes ;
+- `tests/integration/api.test.ts` — l'API **refuse de démarrer** sur une base à laquelle
+  manque une table de conversation, et le message d'erreur contient son nom. Ce test
+  échouait avant la correction : c'est ce qui prouve qu'il mesure quelque chose.
+
+### 7.2 Des libellés qui mentaient sur l'état du dépôt
+
+Aucune conséquence fonctionnelle, mais trois affirmations fausses affichées à l'utilisateur
+ou au développeur :
+
+1. `scripts/e2e.ts` annonçait « aucun parcours E2E à l'étape 1 … ils arrivent à partir de
+   l'étape 2 ». Faux : aucun parcours n'est apparu à l'étape 2, et il ne peut pas encore en
+   apparaître à l'étape 3 — le parcours n° 1 de `docs/09 §11` (« conversation → contenu »)
+   n'est complet qu'une fois la **génération de contenu** livrée. Le message ne porte plus
+   de numéro d'étape, donc il ne pourra plus périmer ; la référence pointait la pyramide
+   (`docs/09 §2`) au lieu de la liste des six parcours (`§11`).
+2. `scripts/check-env.ts` titrait « Vérification de l'environnement — **étape 1** » :
+   l'écran parle du poste de travail, pas d'une étape ; le numéro disparaît.
+3. L'assertion de `tests/integration/api.test.ts` figeait le libellé de la racine et avait
+   dû être retouchée à chaque étape (`étape 1` → `étape 3`). Elle est conservée **exprès** :
+   le libellé de `GET /` est une affirmation produit, et un test qui la fige est un rappel
+   volontaire de la mettre à jour — le commentaire au-dessus le dit maintenant.
+
+### 7.3 Ce qui a été relu sans rien trouver
+
+Les 17 tables (`REQUIRED_TABLE_NAMES`), les colonnes, les déclencheurs SQL, les 13 routes de
+`projects.ts`, les 14 routes de `conversations.ts`, les six composants React
+(`ConversationView`, `ProjectsView`, `ProjectDetailSection`, `ProjectsSection`, `Metrics`,
+`JobsSection`) et les prompts versionnés correspondent à ce que décrivent les §1, §2 et
+`docs/03`. Les autres mentions de « étape 1 » / « étape 2 » restantes dans le code sont des
+**annotations historiques** (« cette table arrive à l'étape 2 ») et non des affirmations sur
+l'état courant : elles sont exactes et doivent rester.
+
+
 

@@ -59,8 +59,17 @@ export function lastMigrationAt(handle: DatabaseHandle): number | null {
   return typeof row.createdAt === 'number' ? row.createdAt : Number(row.createdAt);
 }
 
-/** Vrai si le schéma attendu est en place (l'API refuse de servir sinon). */
-export function isMigrated(handle: DatabaseHandle, expectedTables: readonly string[]): boolean {
+/**
+ * Tables **manquantes** parmi celles attendues, dans l'ordre de la liste.
+ *
+ * Préféré à `isMigrated` partout où le message d'erreur compte : refuser de
+ * démarrer en nommant `conversations` est actionnable, « schéma incomplet » ne
+ * l'est pas.
+ */
+export function missingTables(
+  handle: DatabaseHandle,
+  expectedTables: readonly string[],
+): readonly string[] {
   const present = new Set(
     (
       handle.sqlite.prepare("select name from sqlite_master where type = 'table'").all() as Array<{
@@ -68,5 +77,10 @@ export function isMigrated(handle: DatabaseHandle, expectedTables: readonly stri
       }>
     ).map((row) => row.name),
   );
-  return expectedTables.every((table) => present.has(table));
+  return expectedTables.filter((table) => !present.has(table));
+}
+
+/** Vrai si le schéma attendu est en place (l'API refuse de servir sinon). */
+export function isMigrated(handle: DatabaseHandle, expectedTables: readonly string[]): boolean {
+  return missingTables(handle, expectedTables).length === 0;
 }

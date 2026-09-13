@@ -4,17 +4,17 @@ import {
   createConversationStore,
   createProjectMemoryStore,
   getJob,
-  isMigrated,
   isWalEnabled,
   lastCompletedJob,
   latestHeartbeatAt,
   listJobEvents,
   listJobs,
   listTables,
+  missingTables,
   openDatabase,
   promptSummary,
   sqliteVersion,
-  STEP_ONE_TABLE_NAMES,
+  REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
   type JobRow,
 } from '@aia/database';
@@ -107,10 +107,11 @@ export function buildApi(
   );
   logger.info({ configuration: describeConfig(config) }, 'configuration chargée');
 
-  if (!isMigrated(handle, STEP_ONE_TABLE_NAMES)) {
+  const missing = missingTables(handle, REQUIRED_TABLE_NAMES);
+  if (missing.length > 0) {
     handle.close();
     throw new Error(
-      'Schéma incomplet : la base ne contient pas les 13 tables de l’étape 1. Lancer « pnpm db:migrate ».',
+      `Schéma incomplet : ${missing.length} table(s) manquante(s) sur ${REQUIRED_TABLE_NAMES.length} (${missing.join(', ')}). Lancer « pnpm db:migrate ».`,
     );
   }
 
@@ -140,7 +141,7 @@ export function buildApi(
       host: config.env.APP_HOST,
       port: config.env.APP_PORT,
     },
-    expectedTables: STEP_ONE_TABLE_NAMES,
+    expectedTables: REQUIRED_TABLE_NAMES,
     startedAtMs: STARTED_AT,
     clock,
     database: {
