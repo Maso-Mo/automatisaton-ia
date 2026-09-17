@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  angleDifficultySchema,
+  angleLengthSchema,
+  angleTypeSchema,
   audienceKnowledgeLevelSchema,
   factCategorySchema,
   messageTypeSchema,
@@ -169,3 +172,116 @@ export const masterBriefOutputSchema = z.object({
   master_brief: masterBriefContentSchema,
 });
 export type MasterBriefOutput = z.infer<typeof masterBriefOutputSchema>;
+
+// --- Étape 4 : plan éditorial (sujets et angles) --------------------------
+
+export const SUBJECT_TITLE_MAX = 160;
+export const SUBJECT_THESIS_MAX = 300;
+export const SUBJECT_EVIDENCE_MAX = 8;
+export const EDITORIAL_SUBJECTS_MIN = 3;
+export const EDITORIAL_SUBJECTS_MAX = 5;
+export const ANGLES_PER_SUBJECT_MIN = 2;
+export const ANGLES_PER_SUBJECT_MAX = 3;
+export const ANGLE_HOOK_MAX = 200;
+export const ANGLE_STRUCTURE_MAX = 8;
+export const ANGLE_RATIONALE_MAX = 400;
+export const ANGLE_EVIDENCE_MAX = 6;
+/** Longueur minimale d'un extrait d'ancrage : en dessous, ce n'est pas une citation. */
+export const EVIDENCE_QUOTE_MIN = 6;
+export const EVIDENCE_QUOTE_MAX = 300;
+
+/**
+ * Un **angle** proposé par le `strategist` (docs/04 §4.2) : un regard précis sur
+ * un sujet, pas encore un contenu. `structure` est le déroulé prévu, et
+ * `evidence` l'**ancrage factuel** exigé par docs/04 §4.2 : au moins un extrait
+ * repris d'un fait du projet.
+ *
+ * L'ancrage est une **citation**, pas un identifiant : le paquet de mémoire
+ * affiche les faits en texte (docs/04 §5.1), donc demander un identifiant
+ * ferait inventer des identifiants. Le domaine vérifie que chaque extrait
+ * existe bien dans les faits fournis — c'est ce qui rejette un sujet sans
+ * ancrage, sans faire confiance au modèle.
+ */
+export const angleProposalSchema = z.object({
+  hook: z.string().min(10).max(ANGLE_HOOK_MAX),
+  angle_type: angleTypeSchema,
+  structure: z.array(z.string().min(2).max(160)).min(2).max(ANGLE_STRUCTURE_MAX),
+  estimated_length: angleLengthSchema,
+  difficulty: angleDifficultySchema,
+  /** Indice optionnel : un angle né d'une plateforme n'interdit pas les autres. */
+  platform_hint: platformIdSchema.nullish(),
+  rationale: z.string().min(10).max(ANGLE_RATIONALE_MAX),
+  evidence: z
+    .array(z.string().min(EVIDENCE_QUOTE_MIN).max(EVIDENCE_QUOTE_MAX))
+    .min(1)
+    .max(ANGLE_EVIDENCE_MAX),
+});
+export type AngleProposal = z.infer<typeof angleProposalSchema>;
+
+/** Un **sujet** : une unité de sens indépendante d'une plateforme (docs/03 §8.2). */
+export const subjectProposalSchema = z.object({
+  title: z.string().min(4).max(SUBJECT_TITLE_MAX),
+  thesis: z.string().min(10).max(SUBJECT_THESIS_MAX),
+  /** Pilier de contenu repris de la fiche maître, quand il est connu. */
+  pillar: z.string().min(2).max(160).nullish(),
+  evidence: z
+    .array(z.string().min(EVIDENCE_QUOTE_MIN).max(EVIDENCE_QUOTE_MAX))
+    .min(1)
+    .max(SUBJECT_EVIDENCE_MAX),
+  angles: z.array(angleProposalSchema).min(ANGLES_PER_SUBJECT_MIN).max(ANGLES_PER_SUBJECT_MAX),
+});
+export type SubjectProposal = z.infer<typeof subjectProposalSchema>;
+
+/** Sortie du `strategist`, tâche `angles` : 3 à 5 sujets, 2 à 3 angles chacun. */
+export const editorialPlanOutputSchema = z.object({
+  subjects: z.array(subjectProposalSchema).min(EDITORIAL_SUBJECTS_MIN).max(EDITORIAL_SUBJECTS_MAX),
+});
+export type EditorialPlanOutput = z.infer<typeof editorialPlanOutputSchema>;
+
+// --- Étape 4 : brouillons multi-plateformes -------------------------------
+
+/** Un corps de brouillon : au minimum un message court de réseau social. */
+export const DRAFT_BODY_MIN = 40;
+export const DRAFT_BODY_MAX = 20_000;
+export const DRAFT_HOOK_MAX = 600;
+export const DRAFT_TITLE_MAX = 300;
+export const DRAFT_HASHTAGS_MAX = 12;
+export const DRAFT_MENTIONS_MAX = 12;
+export const DRAFT_NOTES_MAX = 8;
+
+/**
+ * Brouillon d'**une** cible (docs/04 §4.3) : `Draft` et `ScriptDraft` réunis.
+ *
+ * `body` porte tout ce qui sera publié — le texte du post, le script à dire, ou
+ * le plan horodaté d'une vidéo longue. Rien n'est perdu en route : ce qui n'a
+ * pas de colonne dans `content_versions` (le CTA, la structure d'un script) est
+ * **dans** le corps, parce que c'est ce que l'utilisateur collera dans l'outil
+ * de la plateforme.
+ *
+ * `notes` n'est pas décoratif : ce sont les avertissements opérationnels que la
+ * plateforme exige et que le produit ne peut pas deviner — « flair obligatoire,
+ * à renseigner », « vérifiez la règle d'auto-promotion du subreddit »,
+ * « subreddit choisi par l'utilisateur » (docs/06 §5.2). Ils deviennent des
+ * `content_review_notes` visibles à côté du texte, jamais un log.
+ */
+export const targetDraftSchema = z.object({
+  title: z.string().min(2).max(DRAFT_TITLE_MAX).nullish(),
+  hook: z.string().min(2).max(DRAFT_HOOK_MAX),
+  body: z.string().min(DRAFT_BODY_MIN).max(DRAFT_BODY_MAX),
+  hashtags: z.array(z.string().min(1).max(60)).max(DRAFT_HASHTAGS_MAX).default([]),
+  mentions: z.array(z.string().min(1).max(80)).max(DRAFT_MENTIONS_MAX).default([]),
+  notes: z.array(z.string().min(2).max(300)).max(DRAFT_NOTES_MAX).default([]),
+});
+export type TargetDraft = z.infer<typeof targetDraftSchema>;
+
+/**
+ * Sortie du `platform_writer` (docs/04 §4.3) : **un appel couvre toutes les
+ * cibles demandées**. Les clés sont les `ContentTarget` — le schéma ne les
+ * impose pas, parce qu'une régénération ciblée n'en demande qu'une ; c'est le
+ * domaine qui vérifie que toutes les cibles demandées sont présentes et
+ * qu'aucune ne s'est invitée.
+ */
+export const contentDraftsOutputSchema = z.object({
+  drafts: z.record(z.string().min(1).max(40), targetDraftSchema),
+});
+export type ContentDraftsOutput = z.infer<typeof contentDraftsOutputSchema>;

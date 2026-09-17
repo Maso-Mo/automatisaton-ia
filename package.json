@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Plateforme personnelle d'automatisation de contenu assistée par IA — étape 1 : fondations exécutables (docs/10 §4.1)",
+  "description": "Plateforme personnelle d'automatisation de contenu assistée par IA (voir docs/00-cahier-des-charges.md)",
   "engines": {
     "node": ">=20"
   },

@@ -76,7 +76,22 @@ export interface JobContext {
   readonly logger: AppLogger;
 }
 
-export interface JobDefinition<TInput, TOutput> {
+export type JobHandler<TInput = unknown, TOutput = unknown> = (
+  input: TInput,
+  ctx: JobContext,
+) => Promise<TOutput>;
+
+/**
+ * Ce qu'il faut savoir d'un type de job pour l'**accepter** dans la file :
+ * schéma d'entrée, priorités, politique de retry, lease. Rien de plus.
+ *
+ * La séparation avec `JobDefinition` n'est pas cosmétique : **l'API enfile, le
+ * worker exécute** (docs/02 §3). Les deux processus partagent donc la même
+ * spécification — importée d'un seul endroit, jamais recopiée — mais seul le
+ * worker possède le handler. Un producteur sans handler est un cas normal ; un
+ * consommateur sans handler est un bug, et c'est le worker qui le détecte.
+ */
+export interface JobSpec<TInput = unknown> {
   type: string;
   inputSchema: ZodType<TInput>;
   maxAttempts: number;
@@ -84,11 +99,23 @@ export interface JobDefinition<TInput, TOutput> {
   backoff: (attempt: number) => number;
   /** Durée maximale avant reprise du lease par le worker. */
   leaseMs: number;
-  handler: (input: TInput, ctx: JobContext) => Promise<TOutput>;
   /** Un job idempotent peut être rejoué sans effet de bord. */
   idempotent: boolean;
   priority?: number;
   requiresNetwork?: boolean;
   /** Clé logique déduite de l'entrée, quand le type s'y prête. */
   dedupeKey?: (input: TInput) => string | undefined;
+}
+
+export interface JobDefinition<TInput, TOutput> extends JobSpec<TInput> {
+  handler: JobHandler<TInput, TOutput>;
+}
+
+/**
+ * Entrée du registre : une spécification, à laquelle un handler **peut** être
+ * attaché. `handler` reste optionnel pour que la file puisse valider un job
+ * produit par l'API sans exiger du producteur qu'il sache l'exécuter.
+ */
+export interface RegisteredJob extends JobSpec<unknown> {
+  handler?: JobHandler | undefined;
 }

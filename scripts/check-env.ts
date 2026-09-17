@@ -110,7 +110,7 @@ async function main(): Promise<void> {
       label: 'whisper',
       detail: whisperOk
         ? config.env.WHISPER_BIN
-        : `${config.env.WHISPER_BIN} absent → transcription désactivée (étape 3)`,
+        : `${config.env.WHISPER_BIN} absent → transcription désactivée — entrée média du plan, docs/10 §4.3`,
       blocking: false,
     });
 

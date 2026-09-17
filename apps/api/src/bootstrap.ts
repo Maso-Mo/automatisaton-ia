@@ -2,6 +2,7 @@ import {
   applyMigrations,
   countJobsByStatus,
   createConversationStore,
+  createEditorialStore,
   createProjectMemoryStore,
   getJob,
   isWalEnabled,
@@ -28,16 +29,23 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
+import { createJobRegistry, generateContentSpec, SqliteQueue, type Queue } from '@aia/queue';
 import {
   getSystemHealth,
   type ConversationPorts,
+  type EditorialPorts,
   type ProjectMemoryPorts,
   type SystemHealth,
   type SystemHealthPorts,
 } from '@aia/core';
-import { createSystemClock, uuidv7, type Clock } from '@aia/shared';
-import { createConversationAgents, type ConversationAgents } from './features/agents';
+import { createSystemClock, createSystemRandom, uuidv7, type Clock } from '@aia/shared';
+import {
+  createConversationAgents,
+  type ConversationAgents,
+  type EditorialAgents,
+} from './features/agents';
 import type { ConversationFeatureDeps } from './features/conversation';
+import type { EditorialFeatureDeps } from './features/editorial';
 
 const APP_VERSION = '0.1.0';
 const STARTED_AT = Date.now();
@@ -62,6 +70,8 @@ export interface ApiContext {
   conversation: ConversationPorts;
   /** Agents + orchestration du tour : le seul pont entre `core` et `ai`. */
   conversationFeature: ConversationFeatureDeps;
+  /** Orchestration éditoriale : plan (synchrone) et mise en file des rédactions. */
+  editorial: EditorialFeatureDeps;
   health(): SystemHealth;
   jobs(filter?: { statuses?: JobRow['status'][]; limit?: number }): JobRow[];
   job(id: string): JobRow | undefined;
@@ -80,6 +90,13 @@ export function buildApi(
      * configuration (docs/02 §11).
      */
     agents?: ConversationAgents;
+    /** Agents éditoriaux injectables : même raison (tests HTTP sans réseau). */
+    editorialAgents?: EditorialAgents;
+    /**
+     * La file, en **écriture seule** : les tests d'intégration peuvent observer
+     * les jobs enfilés sans exécuter de worker (docs/02 §5).
+     */
+    editorialQueue?: Pick<Queue, 'enqueue'>;
   } = {},
 ): ApiContext {
   const config = overrides.config ?? loadConfig();
@@ -219,6 +236,58 @@ export function buildApi(
     logger,
   };
 
+  /**
+   * Éditorial (étape 4). Deux moitiés, et une seule frontière :
+   *
+   * - les **ports du domaine** lisent la base (sujets, angles, contenus, fiche
+   *   maître) — la fiche maître vient du domaine « conversation », qui en est le
+   *   propriétaire : la recopier créerait deux vérités ;
+   * - la **file** est en écriture seule, et son registre ne porte que des
+   *   *spécifications* (`registerSpec`) : l'API peut enfiler un `generate_content`,
+   *   jamais l'exécuter. Un type non enregistré serait refusé à l'`enqueue`, ce qui
+   *   vaut mieux qu'un job que personne ne sait exécuter (docs/02 §3).
+   */
+  const editorialPorts: EditorialPorts = {
+    store: createEditorialStore(handle, { nowMs: () => clock.nowMs() }),
+    memory: memory.store,
+    briefs: conversation.store.briefs,
+    clock,
+    newId: () => uuidv7(clock.nowMs()),
+  };
+
+  const producerQueue: Pick<Queue, 'enqueue'> =
+    overrides.editorialQueue ??
+    (() => {
+      const registry = createJobRegistry();
+      registry.registerSpec(generateContentSpec);
+      return new SqliteQueue({
+        db: handle,
+        registry,
+        clock,
+        random: createSystemRandom(),
+        logger,
+        leaseMs: config.env.JOB_LEASE_MS,
+        offline: config.env.OFFLINE_MODE,
+      });
+    })();
+
+  const editorial: EditorialFeatureDeps = {
+    memory,
+    ports: editorialPorts,
+    agents:
+      overrides.editorialAgents ??
+      createConversationAgents({
+        config,
+        handle,
+        clock,
+        logger,
+        budget,
+        recorder: createLlmCallRecorder(handle, clock),
+      }),
+    queue: producerQueue,
+    logger,
+  };
+
   return {
     config,
     handle,
@@ -229,6 +298,7 @@ export function buildApi(
     memory,
     conversation,
     conversationFeature,
+    editorial,
     health: () => getSystemHealth(ports),
     jobs: (filter = {}) => listJobs(handle, filter),
     job: (id) => getJob(handle, id),

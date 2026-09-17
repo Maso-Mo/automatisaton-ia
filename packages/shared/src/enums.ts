@@ -358,6 +358,119 @@ export const CONVERSATION_SLOTS = [
 export type ConversationSlot = (typeof CONVERSATION_SLOTS)[number];
 export const conversationSlotSchema = z.enum(CONVERSATION_SLOTS);
 
+// --- Éditorial : sujets, angles, contenus (docs/03 §8.2 à §9.4) ------------
+
+/**
+ * Un **sujet** est une unité de sens indépendante d'une plateforme
+ * (docs/03 §8.2). Son cycle de vie est volontairement court : proposé, choisi,
+ * en production, produit, archivé.
+ */
+export const SUBJECT_STATUSES = [
+  'proposed',
+  'selected',
+  'in_production',
+  'produced',
+  'archived',
+] as const;
+export type SubjectStatus = (typeof SUBJECT_STATUSES)[number];
+export const subjectStatusSchema = z.enum(SUBJECT_STATUSES);
+
+export const SUBJECT_ORIGINS = [
+  'conversation',
+  'news',
+  'manual',
+  'recycling',
+  'analytics',
+] as const;
+export type SubjectOrigin = (typeof SUBJECT_ORIGINS)[number];
+export const subjectOriginSchema = z.enum(SUBJECT_ORIGINS);
+
+/**
+ * Ce que le sujet demande à l'utilisateur, comparé à `project_skill_facts`
+ * (docs/03 §8.2). Calculée **localement** : c'est ce qui empêche le produit de
+ * faire écrire un post d'expert sur une compétence que l'utilisateur découvre.
+ */
+export const SKILL_COVERAGES = ['couverte', 'partielle', 'non_couverte'] as const;
+export type SkillCoverage = (typeof SKILL_COVERAGES)[number];
+export const skillCoverageSchema = z.enum(SKILL_COVERAGES);
+
+/** Types d'angle (docs/03 §8.3). Ce sont eux que l'utilisateur rejette, pas les sujets. */
+export const ANGLE_TYPES = [
+  'retour_experience',
+  'tutoriel',
+  'opinion',
+  'comparaison',
+  'erreur',
+  'coulisses',
+  'question',
+  'etude_de_cas',
+] as const;
+export type AngleType = (typeof ANGLE_TYPES)[number];
+export const angleTypeSchema = z.enum(ANGLE_TYPES);
+
+export const ANGLE_LENGTHS = ['court', 'moyen', 'long'] as const;
+export type AngleLength = (typeof ANGLE_LENGTHS)[number];
+export const angleLengthSchema = z.enum(ANGLE_LENGTHS);
+
+/** Ce que l'angle **exige** de l'utilisateur : affiché avant qu'il ne choisisse. */
+export const ANGLE_DIFFICULTIES = ['faible', 'moyenne', 'elevee'] as const;
+export type AngleDifficulty = (typeof ANGLE_DIFFICULTIES)[number];
+export const angleDifficultySchema = z.enum(ANGLE_DIFFICULTIES);
+
+/** Formats d'un contenu (docs/03 §9.1). `youtube` long et court partagent la plateforme. */
+export const CONTENT_FORMATS = [
+  'post_texte',
+  'post_image',
+  'video_courte',
+  'video_longue',
+  'thread',
+  'article',
+] as const;
+export type ContentFormat = (typeof CONTENT_FORMATS)[number];
+export const contentFormatSchema = z.enum(CONTENT_FORMATS);
+
+/**
+ * Cibles de génération de ce lot : un couple (plateforme, format), parce que
+ * « YouTube Shorts » et « YouTube long » sont la **même plateforme** et deux
+ * formats différents. La clé sert de clé de sortie au `platform_writer` et de
+ * nom de prompt.
+ */
+export const CONTENT_TARGETS = [
+  'linkedin_post',
+  'reddit_post',
+  'tiktok_short',
+  'youtube_short',
+  'youtube_long',
+] as const;
+export type ContentTarget = (typeof CONTENT_TARGETS)[number];
+export const contentTargetSchema = z.enum(CONTENT_TARGETS);
+
+/**
+ * Machine à états d'un contenu (docs/03 §9.1). C'est l'invariant n° 1 du
+ * produit : **aucune publication sans approbation explicite**. Les transitions
+ * sont appliquées dans `packages/core`, jamais dans l'API ni dans le worker.
+ */
+export const CONTENT_STATES = [
+  'draft',
+  'generated',
+  'in_review',
+  'editing',
+  'approved',
+  'scheduled',
+  'publishing',
+  'published',
+  'publish_failed',
+  'publish_ambiguous',
+  'archived',
+] as const;
+export type ContentState = (typeof CONTENT_STATES)[number];
+export const contentStateSchema = z.enum(CONTENT_STATES);
+
+/** Origine d'une version : « initial » est la v1, les autres la remplacent (docs/03 §9.2). */
+export const CONTENT_GENERATIONS = ['initial', 'regenerated', 'edited', 'reformatted'] as const;
+export type ContentGeneration = (typeof CONTENT_GENERATIONS)[number];
+export const contentGenerationSchema = z.enum(CONTENT_GENERATIONS);
+
 // --- Configuration ---------------------------------------------------------
 
 export const SETTING_VALUE_TYPES = ['string', 'number', 'boolean', 'json'] as const;
@@ -452,4 +565,14 @@ export const ENUM_REGISTRY = {
   },
   MASTER_BRIEF_STATUSES: { values: MASTER_BRIEF_STATUSES, schema: masterBriefStatusSchema },
   CONVERSATION_SLOTS: { values: CONVERSATION_SLOTS, schema: conversationSlotSchema },
+  SUBJECT_STATUSES: { values: SUBJECT_STATUSES, schema: subjectStatusSchema },
+  SUBJECT_ORIGINS: { values: SUBJECT_ORIGINS, schema: subjectOriginSchema },
+  SKILL_COVERAGES: { values: SKILL_COVERAGES, schema: skillCoverageSchema },
+  ANGLE_TYPES: { values: ANGLE_TYPES, schema: angleTypeSchema },
+  ANGLE_LENGTHS: { values: ANGLE_LENGTHS, schema: angleLengthSchema },
+  ANGLE_DIFFICULTIES: { values: ANGLE_DIFFICULTIES, schema: angleDifficultySchema },
+  CONTENT_FORMATS: { values: CONTENT_FORMATS, schema: contentFormatSchema },
+  CONTENT_TARGETS: { values: CONTENT_TARGETS, schema: contentTargetSchema },
+  CONTENT_STATES: { values: CONTENT_STATES, schema: contentStateSchema },
+  CONTENT_GENERATIONS: { values: CONTENT_GENERATIONS, schema: contentGenerationSchema },
 } as const;

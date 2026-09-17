@@ -1,11 +1,10 @@
-import { buildMemoryPack, type Agent, type MemoryPack, type MemoryPackFact } from '@aia/ai';
+import { type Agent, type MemoryPack } from '@aia/ai';
 import {
   appendUserMessage,
   buildTurnContext,
   createMasterBrief,
   currentBrief,
   getConversation,
-  getProjectContext,
   readStoredPlan,
   recordAssistantTurn,
   refreshProgress,
@@ -19,7 +18,7 @@ import {
 import type { AppLogger } from '@aia/observability';
 import type { InterviewerInput, StrategistInput, LLMUsage } from '@aia/ai';
 import type { InterviewerOutput, MasterBriefOutput } from '@aia/shared';
-import { ValidationError } from '@aia/shared';
+import { projectMemoryPack } from './memory-pack';
 
 /**
  * Orchestration d'un tour de conversation — le **cœur de l'étape 3**.
@@ -71,68 +70,12 @@ export interface RunTurnResult {
  * Paquet de mémoire d'une conversation : projet, compétences, faits **sélectionnés
  * par le domaine**, public et voix. Vide quand l'entretien n'a rien encore — et
  * c'est exactement ce que l'intervieweur doit aller chercher.
+ *
+ * La construction est partagée avec le plan éditorial (`./memory-pack`) : deux
+ * sélections différentes donneraient deux vérités à deux agents.
  */
 export function memoryPackForProject(deps: ConversationFeatureDeps, projectId: string): MemoryPack {
-  const project = deps.memory.store.projects.byId(projectId);
-  if (!project) {
-    throw new ValidationError(`Projet introuvable : ${projectId}`, {
-      code: 'PROJECT_NOT_FOUND',
-      details: { projectId },
-    });
-  }
-
-  // La sélection est faite par `@aia/core` (importance × récence ÷ usages) : elle
-  // est gratuite, reproductible et explicable, et **seuls les faits confirmés**
-  // entrent dans un prompt (docs/03 §6.1). Aucun embedding, aucun RAG en V1.
-  const context = getProjectContext(deps.memory, projectId);
-
-  return buildMemoryPack({
-    project: {
-      id: project.id,
-      name: project.name,
-      status: project.status,
-      positioning: project.positioning,
-      targetGoal: project.targetGoal,
-      language: project.language,
-    },
-    facts: context.facts.map((item): MemoryPackFact => ({
-      id: item.fact.id,
-      category: item.fact.category,
-      statement: item.fact.statement,
-      detail: item.fact.detail,
-      importance: item.fact.importance,
-      verificationStatus: item.fact.verificationStatus,
-    })),
-    skillFacts: deps.memory.store.skillFacts.list(projectId).map((skill) => ({
-      skill: skill.skill,
-      level: skill.level,
-      evidence: skill.evidence,
-    })),
-    audience: firstAudience(deps, projectId),
-    style: firstStyle(deps, projectId),
-  });
-}
-
-function firstAudience(deps: ConversationFeatureDeps, projectId: string) {
-  const profile = deps.memory.store.audienceProfiles.list(projectId)[0];
-  if (!profile) return null;
-  return {
-    name: profile.name,
-    description: profile.description,
-    knowledgeLevel: profile.knowledgeLevel,
-    painPoints: profile.painPoints,
-  };
-}
-
-function firstStyle(deps: ConversationFeatureDeps, projectId: string) {
-  const profile = deps.memory.store.styleProfiles.list(projectId)[0];
-  if (!profile) return null;
-  return {
-    name: profile.name,
-    tone: profile.tone,
-    formality: profile.formality,
-    forbiddenWords: profile.forbiddenWords,
-  };
+  return projectMemoryPack({ memory: deps.memory }, projectId);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { projects } from './projects';
 
 /**
@@ -20,9 +20,14 @@ export const jobs = sqliteTable(
     output_json: text(),
     error_json: text(),
     project_id: text().references(() => projects.id),
-    // Références vers des tables d'étapes ultérieures (`content_items` : étape 4,
-    // `publications` : étape 5) : colonnes créées maintenant, contrainte de clé
-    // étrangère ajoutée par la migration qui crée la table cible.
+    /**
+     * Contenu visé, **sans contrainte de clé étrangère** : `content_items` est
+     * archivé, jamais supprimé (docs/03 §2.6), donc la contrainte n'apporterait
+     * qu'un cycle de dépendances entre le schéma éditorial et la file. La
+     * cohérence est garantie par le domaine, qui refuse de mettre en file un job
+     * dont la cible n'existe pas — et le rattrapage lit `content_item_id` tel
+     * quel.
+     */
     content_item_id: text(),
     publication_id: text(),
     dedupe_key: text(), // un seul job en attente par clé logique
@@ -88,7 +93,9 @@ export const llmCalls = sqliteTable(
     id: text().primaryKey(),
     job_id: text().references(() => jobs.id),
     project_id: text().references(() => projects.id),
-    // `conversations` arrive à l'étape 2, `content_items` à l'étape 4.
+    // `conversations` (étape 2) et `content_items` (étape 4) sont suivis par
+    // identifiant, sans contrainte : un appel LLM doit rester lisible même si le
+    // contenu a été archivé, et l'observabilité ne dépend pas du domaine.
     conversation_id: text(),
     content_item_id: text(),
     agent: text(), // 'strategist','copywriter','critic','fact_checker','analyst'
@@ -144,5 +151,110 @@ export const promptVersions = sqliteTable(
   (table) => [
     uniqueIndex('uq_prompt_hash').on(table.agent, table.task, table.content_hash),
     index('idx_prompts_active').on(table.agent, table.task, table.is_active),
+  ],
+);
+
+/**
+ * Le journal **centralisé** des erreurs, au-delà de celles des jobs
+ * (docs/03 §14.5). `fingerprint` regroupe les erreurs identiques : sans lui, un
+ * flux mort produit 200 lignes et masque l'erreur unique qui compte.
+ *
+ * `resolved_at` fait partie de la clé d'unicité : la même erreur peut
+ * réapparaître **après** correction, et cette réapparition doit créer une
+ * nouvelle entrée — « toujours cassé » et « recassé » ne se traitent pas pareil.
+ */
+export const errors = sqliteTable(
+  'errors',
+  {
+    id: text().primaryKey(),
+    /** Hash(type + message normalisé + origine). */
+    fingerprint: text().notNull(),
+    severity: text().notNull(),
+    surface: text().notNull(),
+    /** Classe d'erreur du domaine : `AppError.code` quand il existe. */
+    error_type: text().notNull(),
+    message: text().notNull(),
+    stack: text(),
+    context_json: text(),
+    job_id: text(),
+    content_item_id: text(),
+    publication_id: text(),
+    provider: text(),
+    http_status: integer(),
+    retryable: integer({ mode: 'boolean' }).notNull().default(false),
+    occurrence_count: integer().notNull().default(1),
+    first_seen_at: integer().notNull(),
+    last_seen_at: integer().notNull(),
+    resolved_at: integer(),
+    resolution_note: text(),
+  },
+  (table) => [
+    uniqueIndex('uq_error_fingerprint').on(table.fingerprint, table.resolved_at),
+    index('idx_errors_recent').on(table.last_seen_at, table.severity),
+    index('idx_errors_surface').on(table.surface, table.last_seen_at),
+    check('chk_errors_severity', sql`${table.severity} in ('warning','error','fatal')`),
+    check(
+      'chk_errors_surface',
+      sql`${table.surface} in ('api','worker','ui','connector','llm','fs')`,
+    ),
+  ],
+);
+
+/**
+ * Un **unique** enregistrement par contrôle (docs/03 §14.6) : l'état présent,
+ * pas un historique. `consecutive_failures` évite d'alerter sur un incident
+ * transitoire — on n'avertit qu'après trois échecs consécutifs.
+ */
+export const systemHealth = sqliteTable(
+  'system_health',
+  {
+    id: text().primaryKey(),
+    check_name: text().notNull(),
+    status: text().notNull(),
+    message: text(),
+    details_json: text(),
+    latency_ms: integer(),
+    checked_at: integer().notNull(),
+    next_check_at: integer(),
+    consecutive_failures: integer().notNull().default(0),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_health_check').on(table.check_name),
+    check('chk_health_status', sql`${table.status} in ('ok','degraded','down','unknown')`),
+  ],
+);
+
+/**
+ * Le canal par lequel le produit parle à l'utilisateur **sans l'interrompre**
+ * (docs/03 §14.7). `dedupe_key` n'admet qu'une notification active par cause :
+ * trois échecs de publication ne font pas trois notifications identiques.
+ */
+export const notifications = sqliteTable(
+  'notifications',
+  {
+    id: text().primaryKey(),
+    project_id: text().references(() => projects.id),
+    kind: text().notNull(),
+    severity: text().notNull(),
+    title: text().notNull(),
+    body: text(),
+    /** Route interne vers l'écran concerné : une notification doit être actionnable. */
+    action_url: text(),
+    action_label: text(),
+    related_type: text(),
+    related_id: text(),
+    dedupe_key: text().notNull(),
+    read_at: integer(),
+    dismissed_at: integer(),
+    acted_at: integer(),
+    created_at: integer().notNull(),
+    expires_at: integer(),
+  },
+  (table) => [
+    uniqueIndex('uq_notification_dedupe').on(table.dedupe_key),
+    index('idx_notifications_unread').on(table.read_at, table.created_at),
+    index('idx_notifications_project').on(table.project_id, table.created_at),
+    check('chk_notifications_severity', sql`${table.severity} in ('info','attention','urgent')`),
   ],
 );

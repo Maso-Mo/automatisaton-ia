@@ -5,6 +5,7 @@ import { registerSystemRoutes } from './routes/system';
 import { registerJobRoutes } from './routes/jobs';
 import { registerProjectRoutes } from './routes/projects';
 import { registerConversationRoutes } from './routes/conversations';
+import { registerEditorialRoutes } from './routes/editorial';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -26,7 +27,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 3 — conversation et fiche maître',
+    step: 'étape 4 — génération éditoriale',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -58,6 +59,19 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'PATCH /briefs/:briefId',
       'POST /briefs/:briefId/validation',
       'GET /events/conversations/:id',
+      'POST /projects/:id/plan',
+      'GET /projects/:id/subjects',
+      'GET /subjects/:subjectId',
+      'POST /angles/:angleId/select',
+      'POST /angles/:angleId/reject',
+      'GET /projects/:id/content',
+      'POST /projects/:id/content',
+      'POST /content/:contentId/regenerate',
+      'GET /content/:contentId',
+      'POST /content/:contentId/review',
+      'PATCH /content/:contentId',
+      'POST /content/:contentId/approve',
+      'POST /content/:contentId/reject',
     ],
   }));
 
@@ -65,6 +79,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerJobRoutes(app, context);
   registerProjectRoutes(app, context);
   registerConversationRoutes(app, context);
+  registerEditorialRoutes(app, context);
 
   return app;
 }

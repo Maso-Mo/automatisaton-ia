@@ -21,3 +21,4 @@ export * from './service';
 export * from './skills';
 export * from './types';
 export * from './schemas';
+export * from './writer-memory';

@@ -15,6 +15,7 @@
 
 export * from './agents/agent';
 export * from './agents/interviewer';
+export * from './agents/platform-writer';
 export * from './agents/strategist';
 export * from './memory-pack';
 export * from './pricing';

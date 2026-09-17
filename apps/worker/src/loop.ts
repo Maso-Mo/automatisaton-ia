@@ -125,7 +125,8 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
       }
 
       const definition = registry.get(job.type);
-      if (!definition) {
+      const handler = definition?.handler;
+      if (!handler) {
         await queue.fail(job.id, new Error(`Handler absent pour le type ${job.type}`), false);
         continue;
       }
@@ -144,7 +145,7 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
       const execution = (async () => {
         logger.info({ type: job.type, attempt: job.attempt }, 'job réservé');
         try {
-          const output = await definition.handler(job.input, context);
+          const output = await handler(job.input, context);
           await queue.complete(job.id, output);
           logger.info({ type: job.type }, 'job terminé');
         } catch (error) {

@@ -241,7 +241,7 @@ mémoire — c'est exactement l'erreur que la fusion des agents évite.
 | **Rôle** | Rédiger **la** version adaptée à chaque plateforme demandée, à partir d'un angle choisi |
 | **Entrée** | Angle choisi + faits liés + `style_profile` + `audience_profile` + contraintes de format |
 | **Sortie structurée** | `Record<PlatformId, Draft>` avec `Draft = { title?, hook, body, cta?, hashtags?, mentions?, notes }`, plus `ScriptDraft` pour YouTube long |
-| **Prompt** | `prompts/platform_writer/{linkedin,reddit,tiktok,youtube_short,youtube_long}.md` |
+| **Prompt** | `prompts/platform_writer/rules.md` (règles communes) puis un fichier par plateforme : `{linkedin,reddit,tiktok,youtube_short,youtube_long}.md` |
 | **Modèle** | Modèle **intermédiaire à fort** — c'est la sortie la plus visible de l'utilisateur |
 | **Coût cible** | 0,05–0,15 USD pour un lot de 3 à 5 plateformes |
 | **Garde-fou** | Longueurs vérifiées **en code** après génération ; un dépassement déclenche une **régénération ciblée** de la seule plateforme concernée, jamais du lot |
@@ -249,6 +249,13 @@ mémoire — c'est exactement l'erreur que la fusion des agents évite.
 **Un prompt par plateforme, mais un seul appel par lot.** Le fichier de prompt décrit le ton, la
 structure et les interdits de la plateforme ; l'orchestrateur ne passe que les profils demandés.
 Régénérer coûte cher : on ne régénère que ce qui a échoué.
+
+**Ce qui est envoyé au modèle est la concaténation de `rules.md` et des sections des cibles
+demandées, dans l'ordre de `content_targets`.** L'empreinte journalisée est celle du **lot entier** :
+modifier le prompt d'une seule plateforme crée donc une nouvelle version de contenu, et un lot
+rejoué à l'identique porte la même empreinte. Les limites chiffrées (longueurs, nombre de
+hashtags, chapitres) sont lues dans le code au moment de construire le prompt : recopiées dans un
+fichier, elles finiraient par diverger du contrôle qui les vérifie après génération.
 
 **Le `critic` et le `fact_checker` ne sont jamais appelés par le `platform_writer`.** C'est
 l'orchestrateur qui les déclenche, après écriture. Un agent qui pourrait décider de se faire
@@ -477,6 +484,7 @@ packages/prompts/
 ├── interviewer/converse.md
 ├── strategist/master_brief.md
 ├── strategist/angles.md
+├── platform_writer/rules.md      # règles communes : un appel couvre toutes les cibles demandées
 ├── platform_writer/linkedin.md
 ├── platform_writer/reddit.md
 ├── platform_writer/tiktok.md

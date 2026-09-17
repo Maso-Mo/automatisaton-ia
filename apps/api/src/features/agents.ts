@@ -1,22 +1,26 @@
 import {
+  createAnglePlannerAgent,
   createInterviewerAgent,
   createLlmProvider,
   createStrategistAgent,
   loadActivePrompt,
   withRecording,
   type Agent,
+  type AnglePlannerInput,
   type InterviewerInput,
   type PromptSource,
   type StrategistInput,
 } from '@aia/ai';
 import type { BudgetPort } from '@aia/analytics';
-import type { Config } from '@aia/config';
+import { llmModelFor, providerApiKey, type Config } from '@aia/config';
 import type { DatabaseHandle } from '@aia/database';
 import type { ConversationAgentBundle } from './conversation';
+import type { EditorialAgentBundle } from './editorial';
 import type { AppLogger } from '@aia/observability';
 import {
   ValidationError,
   type Clock,
+  type EditorialPlanOutput,
   type InterviewerOutput,
   type LlmProviderId,
   type MasterBriefOutput,
@@ -54,33 +58,30 @@ export interface ConversationAgents {
   strategist(): ConversationAgentBundle<StrategistInput, MasterBriefOutput>;
 }
 
-/** Clé du fournisseur par défaut : jamais lue ailleurs, jamais journalisée. */
-function apiKeyForProvider(config: Config, providerId: LlmProviderId): string | null {
-  switch (providerId) {
-    case 'deepseek':
-      return config.env.DEEPSEEK_API_KEY ?? null;
-    case 'openrouter':
-      return config.env.OPENROUTER_API_KEY ?? null;
-    case 'openai':
-      return config.env.OPENAI_API_KEY ?? null;
-    case 'anthropic':
-      return config.env.ANTHROPIC_API_KEY ?? null;
-    case 'gemini':
-      return config.env.GEMINI_API_KEY ?? null;
-    case 'ollama':
-      return null;
-    default:
-      return null;
-  }
+/**
+ * Les agents de l'étape 4 dans l'API : le **plan éditorial** seulement.
+ *
+ * Le rédacteur (`platform_writer`) n'est pas ici, et ce n'est pas un oubli : la
+ * rédaction est un job, exécuté par le worker. L'API ne peut donc pas payer un
+ * appel qu'elle n'a pas le droit d'exécuter (docs/02 §5) — la répartition des
+ * agents suit celle des processus, pas l'inverse.
+ */
+export interface EditorialAgents {
+  anglePlanner(): EditorialAgentBundle<AnglePlannerInput, EditorialPlanOutput>;
 }
 
-export function createConversationAgents(deps: ConversationAgentsDeps): ConversationAgents {
+/** Clé du fournisseur par défaut : jamais lue ailleurs, jamais journalisée. */
+function apiKeyForProvider(config: Config, providerId: LlmProviderId): string | null {
+  return providerApiKey(config.env, providerId);
+}
+
+export function createConversationAgents(
+  deps: ConversationAgentsDeps,
+): ConversationAgents & EditorialAgents {
   const providerId = deps.config.env.LLM_DEFAULT_PROVIDER;
 
-  const modelFor = (task: 'converse' | 'master_brief'): string | null =>
-    task === 'master_brief'
-      ? (deps.config.env.LLM_MODEL_STANDARD ?? deps.config.env.DEEPSEEK_MODEL)
-      : (deps.config.env.LLM_MODEL_LIGHT ?? deps.config.env.DEEPSEEK_MODEL);
+  const modelFor = (task: 'converse' | 'master_brief' | 'angles'): string =>
+    llmModelFor(deps.config.env, task === 'converse' ? 'light' : 'standard');
 
   /**
    * Un agent = un prompt actif + un fournisseur enregistré. Le bundle est
@@ -146,6 +147,10 @@ export function createConversationAgents(deps: ConversationAgentsDeps): Conversa
     strategist: () =>
       bind<StrategistInput, MasterBriefOutput>('strategist', 'master_brief', (provider, prompt) =>
         createStrategistAgent({ provider, prompt }),
+      ),
+    anglePlanner: () =>
+      bind<AnglePlannerInput, EditorialPlanOutput>('strategist', 'angles', (provider, prompt) =>
+        createAnglePlannerAgent({ provider, prompt }),
       ),
   };
 }

@@ -877,6 +877,15 @@ worker) :
 | toute modification après `approved` | crée une **nouvelle version**, repasse à `editing` et **efface** `approved_version_id` |
 | `→ archived` | jamais depuis `publishing` |
 
+> **La table de transitions réellement appliquée est
+> `CONTENT_STATE_TRANSITIONS`** (`packages/core/src/editorial/content.ts`, implémentée à l'étape 4).
+> Elle suit ce diagramme et s'en écarte sur deux points, tous deux commentés dans le code :
+> les **retours en arrière** d'une régénération (`generated → editing`, `editing → generated`,
+> `approved → editing`, `approved → in_review`) et l'**archivage** possible depuis presque tous les
+> états (sauf `publishing`, `published` et `archived`). Elle **retire** en revanche une transition du
+> diagramme : `generated → approved` n'existe pas, donc aucune approbation ne peut contourner la
+> relecture. Voir [`14-mise-en-oeuvre-etape-4.md`](14-mise-en-oeuvre-etape-4.md) §2 (M10).
+
 **`edit_ratio`** est la mesure honnête de l'utilité du produit. Si l'utilisateur réécrit 85 %
 de chaque contenu, l'automatisation n'apporte rien et il faut changer les prompts, pas ajouter
 des fonctionnalités. Cette métrique est calculée localement (diff de texte) et affichée dans

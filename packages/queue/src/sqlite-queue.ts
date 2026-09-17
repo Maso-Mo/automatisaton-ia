@@ -32,7 +32,8 @@ import {
 import type { AppLogger } from '@aia/observability';
 import { DEFAULT_BACKOFF, createBackoff } from './backoff';
 import { decideRetry, isRetryAllowed } from './retry-policy';
-import type { AnyJobDefinition, JobRegistry } from './registry';
+import type { RegisteredJob } from './types';
+import type { JobRegistry } from './registry';
 import type { ClaimedJob, EnqueueOptions, JobContext, JobEventInput, Queue } from './types';
 
 export interface SqliteQueueDeps {
@@ -367,7 +368,7 @@ export class SqliteQueue implements Queue {
     };
   }
 
-  private requireDefinition(type: string): AnyJobDefinition {
+  private requireDefinition(type: string): RegisteredJob {
     const definition = this.registry.get(type);
     if (!definition) {
       throw new ValidationError(`Type de job inconnu : ${type}`, {

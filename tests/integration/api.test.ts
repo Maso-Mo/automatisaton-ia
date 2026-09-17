@@ -37,8 +37,12 @@ describe('API : racine, diagnostic, jobs et flux SSE', () => {
     // Le libellé d'étape est une **affirmation produit** : il nomme ce que
     // l'application sait faire aujourd'hui. Ce test le fige pour qu'il ne
     // régresse pas et n'annonce jamais une étape inexistante.
-    expect(body.step).toBe('étape 3 — conversation et fiche maître');
+    expect(body.step).toBe('étape 4 — génération éditoriale');
     expect(body.endpoints).toContain('GET /system/health');
+    // L'étape 4 ajoute le plan éditorial et la génération de contenus : la racine
+    // les annonce, donc l'écran sait où aller sans deviner une URL.
+    expect(body.endpoints).toContain('POST /projects/:id/plan');
+    expect(body.endpoints).toContain('POST /projects/:id/content');
   });
 
   it('sert le diagnostic : base migrée, worker, clé IA, budget du jour', async () => {

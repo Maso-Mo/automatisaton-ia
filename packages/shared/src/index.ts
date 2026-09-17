@@ -6,9 +6,11 @@
  * par les paquets d'infrastructure que `packages/core` ne peut pas importer.
  */
 
+export * from './content-targets';
 export * from './contracts';
 export * from './enums';
 export * from './errors';
+export * from './hash';
 export * from './ids';
 export * from './json';
 export * from './money';

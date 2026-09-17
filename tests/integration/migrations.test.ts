@@ -4,6 +4,7 @@ import {
   REQUIRED_TABLE_NAMES,
   STEP_ONE_TABLE_NAMES,
   STEP_THREE_TABLE_NAMES,
+  STEP_FOUR_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -32,12 +33,36 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
     // La liste vérifiée par l'amorçage doit couvrir **toutes** les étapes : une
     // table oubliée ici serait une base acceptée au démarrage puis cassée à la
     // première requête.
-    expect(REQUIRED_TABLE_NAMES).toEqual([...STEP_ONE_TABLE_NAMES, ...STEP_THREE_TABLE_NAMES]);
+    expect(REQUIRED_TABLE_NAMES).toEqual([
+      ...STEP_ONE_TABLE_NAMES,
+      ...STEP_THREE_TABLE_NAMES,
+      // Les deux tables éditoriales de l'étape 3 (sujets et angles) : elles
+      // arrivent avec la migration 0003, mais elles appartiennent à l'étape 3.
+      'content_subjects',
+      'subject_angles',
+      ...STEP_FOUR_TABLE_NAMES,
+    ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
       'messages',
       'conversation_summaries',
       'master_briefs',
+    ]);
+    // Les huit tables de l'étape 4 (docs/10 §4.4) : les cinq du contenu et de la
+    // vidéo, et les trois de l'observabilité. Les citer explicitement est le but
+    // du test — `video_renders`, `errors`, `system_health` et `notifications`
+    // n'ont encore aucun code qui les interroge à ce stade, et c'est
+    // précisément quand une table n'est pas encore utilisée qu'elle peut
+    // disparaître d'une migration sans que personne ne le voie.
+    expect(STEP_FOUR_TABLE_NAMES).toEqual([
+      'content_items',
+      'content_versions',
+      'content_claims',
+      'content_review_notes',
+      'video_renders',
+      'errors',
+      'system_health',
+      'notifications',
     ]);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });

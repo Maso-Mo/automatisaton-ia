@@ -8,6 +8,7 @@
  */
 
 export * from './backoff';
+export * from './job-specs';
 export * from './registry';
 export * from './retry-policy';
 export * from './sqlite-queue';

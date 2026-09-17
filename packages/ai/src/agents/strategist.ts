@@ -1,4 +1,9 @@
-import { masterBriefOutputSchema, type MasterBriefOutput } from '@aia/shared';
+import {
+  editorialPlanOutputSchema,
+  masterBriefOutputSchema,
+  type EditorialPlanOutput,
+  type MasterBriefOutput,
+} from '@aia/shared';
 import { renderMemoryPack, type MemoryPack } from '../memory-pack';
 import type { LLMProvider } from '../provider';
 import { createStructuredAgent, type Agent, type PromptSource } from './agent';
@@ -83,5 +88,75 @@ export function createStrategistAgent(
     maxInputTokens: options.maxInputTokens ?? STRATEGIST_MAX_INPUT_TOKENS,
     temperature: options.temperature ?? 0.3,
     expectedOutputTokens: 1_200,
+  });
+}
+
+/**
+ * Entrée du **plan éditorial** : la même mémoire que la fiche maître, plus ce
+ * qui est déjà écrit.
+ *
+ * `recentTitles` n'est pas décoratif : sans lui, le modèle repropose les sujets
+ * des contenus précédents et le plan devient une redite (docs/04 §4.2). Les
+ * titres viennent du domaine (`listSubjectTitles`), pas du modèle.
+ */
+export interface AnglePlannerInput {
+  memoryPack: MemoryPack;
+  /** Les trous assumés de la fiche maître : ils orientent, ils ne bloquent pas. */
+  openQuestions: readonly string[];
+  /** Sujets déjà produits ou en production : à ne pas reproposer. */
+  recentTitles: readonly string[];
+}
+
+export const ANGLE_PLANNER_MAX_INPUT_TOKENS = 12_000;
+export const ANGLE_PLANNER_MAX_OUTPUT_TOKENS = 8_000;
+
+export function buildAnglePlannerPrompt(input: AnglePlannerInput): string {
+  const parts: string[] = [];
+  parts.push('# Mémoire vérifiée du projet');
+  parts.push(renderMemoryPack(input.memoryPack));
+
+  parts.push('', '# Sujets déjà traités (à ne pas reproposer)');
+  parts.push(
+    input.recentTitles.length === 0
+      ? 'Aucun sujet traité à ce jour.'
+      : input.recentTitles.map((title) => `- ${title}`).join('\n'),
+  );
+
+  parts.push('', '# Points restés ouverts dans la fiche maître');
+  parts.push(
+    input.openQuestions.length === 0
+      ? 'Aucun point ouvert.'
+      : input.openQuestions.map((question) => `- ${question}`).join('\n'),
+  );
+
+  parts.push(
+    '',
+    'Rappel : chaque `evidence` doit être un extrait **copié mot pour mot** d’un fait ci-dessus. Une citation introuvable fait rejeter le sujet entier.',
+  );
+  return parts.join('\n');
+}
+
+/**
+ * Le plan éditorial (docs/04 §4.2) : **3 à 5 sujets**, chacun avec 2 à 3 angles,
+ * chacun ancré dans un fait du projet.
+ *
+ * Même agent, autre tâche : la mémoire, l'ancrage et le coût sont identiques à
+ * la fiche maître, seul le prompt change. C'est ce qui permet à l'utilisateur de
+ * dire « propose-moi autre chose » sans repayer la fiche.
+ */
+export function createAnglePlannerAgent(
+  options: StrategistAgentOptions,
+): Agent<AnglePlannerInput, EditorialPlanOutput> {
+  return createStructuredAgent<AnglePlannerInput, EditorialPlanOutput>({
+    name: 'strategist',
+    task: 'angles',
+    provider: options.provider,
+    prompt: options.prompt,
+    schema: editorialPlanOutputSchema,
+    buildPrompt: (input) => `${options.prompt.body}\n\n${buildAnglePlannerPrompt(input)}`,
+    maxOutputTokens: options.maxOutputTokens ?? ANGLE_PLANNER_MAX_OUTPUT_TOKENS,
+    maxInputTokens: options.maxInputTokens ?? ANGLE_PLANNER_MAX_INPUT_TOKENS,
+    temperature: options.temperature ?? 0.4,
+    expectedOutputTokens: 2_000,
   });
 }

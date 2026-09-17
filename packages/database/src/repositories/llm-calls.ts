@@ -132,6 +132,18 @@ export function listRecentLlmCalls(handle: DatabaseHandle, limit = 20): LlmCallR
   return handle.db.select().from(llmCalls).orderBy(desc(llmCalls.created_at)).limit(limit).all();
 }
 
+/**
+ * Un appel par son identifiant.
+ *
+ * C'est la remontée exacte d'une trace : une version de contenu porte
+ * `llm_call_id`, et c'est cette ligne qui dit quel prompt, quel modèle et quelle
+ * empreinte de contexte ont produit le texte (docs/03 §14.4). Recalculer
+ * l'empreinte côté appelant donnerait une valeur voisine, jamais la même.
+ */
+export function getLlmCall(handle: DatabaseHandle, id: string): LlmCallRow | null {
+  return handle.db.select().from(llmCalls).where(eq(llmCalls.id, id)).get() ?? null;
+}
+
 function filterConditions(filter: SpendFilter) {
   const conditions = [];
   if (filter.task) conditions.push(eq(llmCalls.task, filter.task));

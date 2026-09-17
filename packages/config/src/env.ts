@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { APP_ENVS, ASR_ENGINES, LLM_PROVIDER_IDS, LOG_LEVELS, STORAGE_DRIVERS } from '@aia/shared';
+import {
+  APP_ENVS,
+  ASR_ENGINES,
+  LLM_PROVIDER_IDS,
+  LOG_LEVELS,
+  STORAGE_DRIVERS,
+  type LlmProviderId,
+} from '@aia/shared';
 
 /**
  * `packages/config` est le **seul** endroit du dépôt qui lit `process.env`
@@ -167,6 +174,54 @@ export const envSchema = z.object({
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+/**
+ * La **clé d'API** d'un fournisseur, ou `null` quand il n'en faut pas (Ollama
+ * local).
+ *
+ * Ce mapping vit ici, et une seule fois : c'est ce paquet qui connaît les
+ * variables d'environnement (docs/02 §11). Le recopier dans l'API et dans le
+ * worker ferait diverger deux vérités au premier fournisseur ajouté — et c'est
+ * exactement le genre d'écart qui se découvre en production, quand un job part
+ * sans clé pendant que la conversation fonctionne.
+ *
+ * La clé n'est jamais journalisée : `redact` s'en charge au point de passage.
+ */
+export function providerApiKey(env: Env, providerId: LlmProviderId): string | null {
+  switch (providerId) {
+    case 'deepseek':
+      return env.DEEPSEEK_API_KEY ?? null;
+    case 'openrouter':
+      return env.OPENROUTER_API_KEY ?? null;
+    case 'openai':
+      return env.OPENAI_API_KEY ?? null;
+    case 'anthropic':
+      return env.ANTHROPIC_API_KEY ?? null;
+    case 'gemini':
+      return env.GEMINI_API_KEY ?? null;
+    case 'ollama':
+      // Un modèle local n'a pas de clé : `null` est la valeur correcte, pas une
+      // configuration manquante.
+      return null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Le **modèle** d'un palier de qualité (docs/08 §9.1), avec repli sur
+ * `DEEPSEEK_MODEL`.
+ *
+ * Deux paliers, et pas un par tâche : `light` pour ce qui se répète (un tour de
+ * conversation se paie à chaque message), `standard` pour ce qui conditionne le
+ * reste (fiche maître, plan, rédaction). Les tâches se rangent dans l'un ou
+ * l'autre — le choix du texte exact d'un modèle reste une décision
+ * d'exploitation, pas de code.
+ */
+export function llmModelFor(env: Env, tier: 'light' | 'standard'): string {
+  const configured = tier === 'light' ? env.LLM_MODEL_LIGHT : env.LLM_MODEL_STANDARD;
+  return configured ?? env.DEEPSEEK_MODEL;
+}
 
 /** Toutes les variables connues — sert au test de parité avec `.env.example`. */
 export const ENV_KEYS = Object.keys(envSchema.shape) as (keyof Env)[];
