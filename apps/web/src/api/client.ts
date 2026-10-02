@@ -224,6 +224,9 @@ export interface MessageView {
   contentJson: { plan?: EditPlanView } | null;
   messageType: string;
   agent: string | null;
+  inputMode: string | null;
+  audioAssetId: string | null;
+  transcriptStatus: string | null;
   tokensIn: number | null;
   tokensOut: number | null;
   costMicroUsd: number;
@@ -266,6 +269,33 @@ export interface TurnResponse {
   repaired: boolean;
 }
 
+export interface MediaAssetView {
+  id: string;
+  projectId: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number | null;
+}
+
+export interface TranscriptView {
+  id: string;
+  mediaAssetId: string;
+  engine: string;
+  model: string | null;
+  language: string | null;
+  text: string;
+  editedBody: string | null;
+  durationMs: number | null;
+  processingMs: number | null;
+}
+
+export interface VoiceCapabilities {
+  transcription: { available: boolean; engine: string; model: string; detail?: string };
+  maxUploadBytes: number;
+  maxDurationMs: number;
+  acceptedMimeTypes: string[];
+}
+
 export interface BriefDetailResponse {
   brief: MasterBriefView;
   missing: string[];
@@ -295,14 +325,34 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
       ...init.headers,
     },
   });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: { message?: string; code?: string };
-    } | null;
-    const suffix = body?.error?.code ? ` (${body.error.code})` : '';
-    throw new Error((body?.error?.message ?? `Requête refusée (${response.status})`) + suffix);
-  }
+  await ensureOk(response);
   return (await response.json()) as T;
+}
+
+/**
+ * Vérifie la réponse et lève **le message de l'API**, qui est la seule source de
+ * vérité du refus : catégorie, code et détail viennent du serveur, jamais d'une
+ * traduction locale (docs/10 §4).
+ */
+async function ensureOk(response: Response): Promise<void> {
+  if (response.ok) return;
+  const body = (await response.json().catch(() => null)) as {
+    error?: { message?: string; code?: string };
+  } | null;
+  const suffix = body?.error?.code ? ` (${body.error.code})` : '';
+  throw new Error((body?.error?.message ?? `Requête refusée (${response.status})`) + suffix);
+}
+
+/**
+ * Suppression sans corps de réponse (`204`) : `request` lit toujours du JSON, et
+ * un `204` n'en contient pas — d'où cette variante plutôt qu'un `.catch()`.
+ */
+async function deleteVoid(path: string): Promise<void> {
+  const response = await fetch(`/api${path}`, {
+    method: 'DELETE',
+    headers: { accept: 'application/json' },
+  });
+  await ensureOk(response);
 }
 
 /** Sérialise un corps JSON, en retirant les valeurs `undefined`. */
@@ -635,6 +685,32 @@ export const api = {
   /** Un tour complet : le message de l'assistant arrive avec son plan d'écriture. */
   sendMessage: (id: string, body: { content: string }) =>
     postJson<TurnResponse>(`/conversations/${encodeURIComponent(id)}/messages`, body),
+  voiceCapabilities: () => getJson<VoiceCapabilities>('/media/capabilities'),
+  uploadVoice: (id: string, audio: Blob) =>
+    request<{ asset: MediaAssetView; jobId: string }>(
+      `/conversations/${encodeURIComponent(id)}/voice`,
+      {
+        method: 'POST',
+        body: audio,
+        headers: { 'content-type': audio.type || 'application/octet-stream' },
+      },
+    ),
+  voiceTranscript: (id: string, assetId: string) =>
+    getJson<{ asset: MediaAssetView; transcript: TranscriptView | null }>(
+      `/conversations/${encodeURIComponent(id)}/voice/${encodeURIComponent(assetId)}/transcript`,
+    ),
+  /**
+   * Annuler un enregistrement **non envoyé**. L'API refuse (`409`) un audio déjà
+   * rattaché à un message : la preuve de ce qui a été envoyé ne se supprime pas
+   * depuis l'écran.
+   */
+  cancelVoice: (id: string, assetId: string) =>
+    deleteVoid(`/conversations/${encodeURIComponent(id)}/voice/${encodeURIComponent(assetId)}`),
+  sendVoiceTranscript: (id: string, assetId: string, content: string) =>
+    postJson<TurnResponse & { transcript: TranscriptView }>(
+      `/conversations/${encodeURIComponent(id)}/voice/${encodeURIComponent(assetId)}/send`,
+      { content },
+    ),
   /** Le seul chemin d'écriture en mémoire : accepter des propositions. */
   applyProposals: (
     id: string,

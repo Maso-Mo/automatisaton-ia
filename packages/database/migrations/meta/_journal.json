@@ -36,6 +36,13 @@
       "when": 1790956800000,
       "tag": "0004_step_five_manual_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790960400000,
+      "tag": "0005_step_six_voice_transcription",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import {
   STEP_THREE_TABLE_NAMES,
   STEP_FOUR_TABLE_NAMES,
   STEP_FIVE_TABLE_NAMES,
+  STEP_SIX_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -43,6 +44,7 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       'subject_angles',
       ...STEP_FOUR_TABLE_NAMES,
       ...STEP_FIVE_TABLE_NAMES,
+      ...STEP_SIX_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
@@ -73,6 +75,11 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       'publication_attempts',
       'manual_packages',
     ]);
+    // Les trois tables de l'étape 6 (docs/10 §4.6) : l'audio téléversé, sa
+    // transcription locale, et le lien entre un message envoyé et son audio.
+    // `message_attachments` est ce qui rend un audio **introuvable à supprimer**
+    // une fois envoyé — la preuve de ce qui a été dit.
+    expect(STEP_SIX_TABLE_NAMES).toEqual(['media_assets', 'transcripts', 'message_attachments']);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });
 

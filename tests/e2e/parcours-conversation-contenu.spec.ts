@@ -153,7 +153,10 @@ test.describe('parcours 1 — de l’entretien à la publication manuelle', () =
       await page
         .getByPlaceholder('Répondez à la question, ou racontez ce que vous avez fait…')
         .fill(USER_TURN);
-      await page.getByRole('button', { name: 'Envoyer' }).click();
+      // `exact` est nécessaire depuis l'étape 6 : la zone d'entrée vocale porte
+      // aussi un bouton « Envoyer cette transcription », et deux boutons ne
+      // peuvent pas répondre à la même question.
+      await page.getByRole('button', { name: 'Envoyer', exact: true }).click();
 
       // La réponse scriptée arrive, et avec elle les propositions : rien n'est en
       // mémoire tant qu'elles ne sont pas acceptées.

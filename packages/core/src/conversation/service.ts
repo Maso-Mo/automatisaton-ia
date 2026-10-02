@@ -205,6 +205,8 @@ export function refreshProgress(
 export interface AppendUserMessageInput {
   content: string;
   inputMode?: MessageInputMode;
+  audioAssetId?: string | null;
+  transcriptStatus?: string | null;
 }
 
 /**
@@ -231,6 +233,8 @@ export function appendUserMessage(
     content,
     messageType: 'text',
     inputMode: input.inputMode ?? 'text',
+    audioAssetId: input.audioAssetId ?? null,
+    transcriptStatus: input.transcriptStatus ?? null,
   });
   ports.store.messages.insert(message);
 

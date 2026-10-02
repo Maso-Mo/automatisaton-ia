@@ -45,6 +45,28 @@ export const generateContentInputSchema = z.object({
 
 export type GenerateContentInput = z.infer<typeof generateContentInputSchema>;
 
+/** Transcription locale d'un média vocal, sans aucun accès réseau. */
+export const TRANSCRIBE_MEDIA_JOB = 'transcribe_media';
+
+export const transcribeMediaInputSchema = z.object({
+  assetId: z.string().min(1),
+  language: z.string().min(2).max(12).default('fr'),
+});
+
+export type TranscribeMediaInput = z.infer<typeof transcribeMediaInputSchema>;
+
+export const transcribeMediaSpec: JobSpec<TranscribeMediaInput> = {
+  type: TRANSCRIBE_MEDIA_JOB,
+  inputSchema: transcribeMediaInputSchema,
+  maxAttempts: 2,
+  backoff: () => 30_000,
+  leaseMs: 60 * 60 * 1_000,
+  idempotent: true,
+  priority: 2,
+  requiresNetwork: false,
+  dedupeKey: (input) => `transcribe:${input.assetId}:${input.language}`,
+};
+
 /**
  * Politique du job de rédaction.
  *

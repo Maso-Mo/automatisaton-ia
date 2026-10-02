@@ -225,7 +225,17 @@ export function completeJob(
     .run();
 }
 
-/** Retry réessayable : le job retourne en file avec un `available_at` futur. */
+/**
+ * Retry réessayable : le job retourne en file avec un `available_at` futur.
+ *
+ * `scheduled_for` prend **le même** décalage, et ce n'est pas un détail : c'est
+ * cette colonne que `promoteDueJobs` (ci-dessous) lit pour rendre un job
+ * disponible. La laisser sur l'échéance d'origine ferait « échoir » le job au
+ * tour de boucle suivant — le planificateur remettrait `available_at = now` et le
+ * backoff serait annulé, transformant une attente de trente secondes en reprise
+ * immédiate. L'échéance d'un job est celle de sa **prochaine** exécution, qu'elle
+ * vienne d'un cron ou d'un backoff (docs/03 §jobs, docs/08 §2.1).
+ */
 export function markJobForRetry(
   handle: DatabaseHandle,
   params: { jobId: string; now: number; availableAt: number; errorJson: string },
@@ -235,6 +245,7 @@ export function markJobForRetry(
     .set({
       status: 'queued',
       available_at: params.availableAt,
+      scheduled_for: params.availableAt,
       error_json: params.errorJson,
       worker_id: null,
       lease_expires_at: null,

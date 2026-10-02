@@ -28,6 +28,8 @@ export interface MessageInput {
   messageType?: MessageType;
   agent?: string | null;
   inputMode?: MessageInputMode | null;
+  audioAssetId?: string | null;
+  transcriptStatus?: string | null;
   tokensIn?: number | null;
   tokensOut?: number | null;
   costMicroUsd?: number;
@@ -50,8 +52,8 @@ export function buildMessage(
     messageType: input.messageType ?? 'text',
     agent: input.agent ?? null,
     inputMode: input.inputMode ?? null,
-    audioAssetId: null,
-    transcriptStatus: null,
+    audioAssetId: input.audioAssetId ?? null,
+    transcriptStatus: input.transcriptStatus ?? null,
     tokensIn: input.tokensIn ?? null,
     tokensOut: input.tokensOut ?? null,
     costMicroUsd: input.costMicroUsd ?? 0,

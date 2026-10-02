@@ -12,12 +12,14 @@ import { createBudgetPort } from '@aia/analytics';
 import {
   createConversationStore,
   createEditorialStore,
+  createMediaStore,
   createProjectMemoryStore,
   missingTables,
   openDatabase,
   REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
+import { LocalStorageAdapter, ScriptedTranscriber } from '@aia/media';
 import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createJobRegistry, generateContentSpec, SqliteQueue } from '@aia/queue';
@@ -31,6 +33,7 @@ import {
 import { buildServer } from '../../../apps/api/src/server';
 import { buildApi } from '../../../apps/api/src/bootstrap';
 import { createGenerateContentHandler } from '../../../apps/worker/src/handlers/generate-content';
+import { createTranscribeMediaHandler } from '../../../apps/worker/src/handlers/transcribe-media';
 import { createWorkerLoop } from '../../../apps/worker/src/loop';
 import type { WriterProviderFactory } from '../../../apps/worker/src/features/platform-writer';
 import {
@@ -41,7 +44,7 @@ import {
 } from '../../support/conversation';
 import { defaultDrafts, defaultPlanOutput, scriptedAnglePlanner } from '../../support/editorial';
 import { e2eConfig } from './environment';
-import { REGENERATION_MARKER } from './script';
+import { REGENERATION_MARKER, VOICE_TRANSCRIPT } from './script';
 
 /**
  * La pile du parcours : **l'API et le worker**, sur une base neuve, avec le
@@ -72,6 +75,17 @@ const logger: AppLogger = createLogger({
 });
 const clock: Clock = createSystemClock();
 
+/**
+ * Le **moteur de transcription scripté** (étape 6).
+ *
+ * Un seul exemplaire, partagé par l'API — qui annonce la capacité sur
+ * `/media/capabilities` — et par le worker, qui transcrit : c'est la topologie
+ * de production (une installation whisper.cpp, deux processus qui la lisent),
+ * sans binaire, sans modèle et sans réseau (docs/09 §1.1). Le texte servi vient
+ * de `./script`, la même source que celle lue par la spécification navigateur.
+ */
+const transcriber = new ScriptedTranscriber({ text: VOICE_TRANSCRIPT, durationMs: 4_200 });
+
 // --- L'API : l'entretien, la fiche maître et le plan sont scriptés ----------
 
 const api = buildApi({
@@ -97,6 +111,7 @@ const api = buildApi({
       lastCallId: () => null,
     }),
   },
+  transcriber,
 });
 
 const server = buildServer(api);
@@ -226,6 +241,24 @@ registry.register({
     },
   }),
 });
+
+/**
+ * Le handler de transcription, branché sur le **même** moteur scripté que celui
+ * annoncé par l'API : la transcription du parcours est donc produite par le
+ * chemin réel (worker → stockage local → moteur), seul le moteur est remplacé.
+ *
+ * `maxDurationMs` est câblé comme en production, depuis la configuration : un
+ * plafond de test désactivé ne prouverait rien.
+ */
+registry.register(
+  createTranscribeMediaHandler({
+    media: createMediaStore(handle, () => clock.nowMs()),
+    storage: new LocalStorageAdapter(config.paths.mediaRoot),
+    transcriber,
+    clock,
+    maxDurationMs: config.env.MEDIA_MAX_DURATION_S * 1_000,
+  }),
+);
 
 const queue = new SqliteQueue({
   db: handle,

@@ -13,6 +13,7 @@ export * from './repositories/editorial';
 export * from './repositories/job-events';
 export * from './repositories/jobs';
 export * from './repositories/llm-calls';
+export * from './repositories/media';
 export * from './repositories/project-memory';
 export * from './repositories/publishing';
 export * from './repositories/prompt-versions';

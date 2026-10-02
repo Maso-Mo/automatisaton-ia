@@ -59,3 +59,36 @@ export const REJECTION_REASON = 'Ton trop promotionnel pour ce subreddit.';
 /** Les cibles cochées sur l'angle retenu (libellés de `vocabulary.targets`). */
 export const LINKEDIN_TARGET = 'Post LinkedIn';
 export const REDDIT_TARGET = 'Post Reddit';
+
+/**
+ * Parcours 2 — l'**entrée vocale** (étape 6).
+ *
+ * Le texte de la transcription est écrit **ici**, et `stack.ts` le met dans la
+ * bouche du moteur scripté : chercher une autre chaîne à l'écran ne prouverait
+ * que la présence d'un texte fixe, pas que le texte affiché est celui que le
+ * moteur a produit (docs/09 §1.1).
+ */
+export const VOICE_PROJECT = {
+  name: 'Voix et transcription',
+  goal: 'Vérifier l’entrée vocale de bout en bout',
+  positioning: 'Projet du parcours vocal',
+  description: 'Le parcours qui enregistre, transcrit, corrige et confirme',
+};
+
+/** Le tour de texte qui ouvre l'entretien : le micro répond à une question. */
+export const VOICE_OPENING_TURN = 'Je veux dicter mes notes plutôt que les taper.';
+
+/**
+ * Ce que le moteur scripté a « entendu » : la transcription brute de l'audio.
+ *
+ * Volontairement **recopiée** de `SCRIPTED_TRANSCRIPT_TEXT` (`@aia/media`), pour
+ * la même raison que `USER_TURN` : ce fichier n'importe rien. `stack.ts` la passe
+ * explicitement au moteur scripté, si bien qu'une divergence entre les deux
+ * chaînes ne rendrait pas le parcours vert à tort — elle le ferait échouer ici,
+ * à la première assertion d'écran.
+ */
+export const VOICE_TRANSCRIPT =
+  'J’ai automatisé la facturation avec n8n et je veux raconter le montage exact.';
+
+/** La correction apportée à la main **avant** l'envoi : elle doit partir telle quelle. */
+export const VOICE_CORRECTION = 'Relu et corrigé : le montage tient en trois nœuds.';

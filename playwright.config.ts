@@ -37,6 +37,16 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
+    /**
+     * Le parcours vocal (étape 6) enregistre **vraiment** : Chromium reçoit la
+     * permission micro et un périphérique factice, et `MediaRecorder` produit un
+     * WebM valide que l'API accepte. Sans cela, le parcours ne pourrait simuler
+     * qu'un clic, pas un enregistrement — et ne prouverait rien du chemin audio.
+     */
+    permissions: ['microphone'],
+    launchOptions: {
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+    },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [

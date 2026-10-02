@@ -13,6 +13,7 @@ import { getTableName } from 'drizzle-orm';
 
 export * from './conversation';
 export * from './editorial';
+export * from './media';
 export * from './projects';
 export * from './publishing';
 export * from './system';
@@ -53,6 +54,7 @@ import {
   publicationAttempts,
   publications,
 } from './publishing';
+import { mediaAssets, messageAttachments, transcripts } from './media';
 
 /** Liste de référence : sert aux tests de migration et au diagnostic. */
 export const STEP_ONE_TABLES = [
@@ -139,6 +141,14 @@ export const STEP_FIVE_TABLES = [
   manualPackages,
 ] as const;
 
+export const STEP_SIX_TABLE_NAMES: readonly string[] = [
+  'media_assets',
+  'transcripts',
+  'message_attachments',
+];
+
+export const STEP_SIX_TABLES = [mediaAssets, transcripts, messageAttachments] as const;
+
 /** Les deux tables éditoriales de l'étape 3, avec les autres : elles vivent dans `./editorial`. */
 export const STEP_THREE_EDITORIAL_TABLES = [contentSubjects, subjectAngles] as const;
 
@@ -158,4 +168,5 @@ export const REQUIRED_TABLE_NAMES: readonly string[] = [
   ...STEP_THREE_EDITORIAL_TABLES.map((table) => getTableName(table)),
   ...STEP_FOUR_TABLE_NAMES,
   ...STEP_FIVE_TABLE_NAMES,
+  ...STEP_SIX_TABLE_NAMES,
 ];

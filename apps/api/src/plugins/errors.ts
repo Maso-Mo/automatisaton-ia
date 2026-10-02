@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AppError, serializeError, toAppError } from '@aia/shared';
+import { AppError, ValidationError, serializeError, toAppError } from '@aia/shared';
 import { CATEGORY_TO_STATUS } from '../http-status';
 
 /** Corps d'erreur envoyé au client : jamais de trace de pile (docs/08 §6.3). */
@@ -7,6 +7,21 @@ export function errorBody(error: unknown): { error: Record<string, unknown> } {
   const serialized = serializeError(toAppError(error));
   const { stack: _stack, ...safe } = serialized;
   return { error: safe };
+}
+
+/**
+ * Un corps de requête qui dépasse la limite déclarée par la route
+ * (`bodyLimit`, cf. `routes/media.ts`) est refusé par Fastify **avant** le
+ * gestionnaire : c'est une erreur de format, pas une panne. Sans cette
+ * traduction, un enregistrement trop volumineux produirait un `500` et l'écran
+ * afficherait « erreur interne » au lieu de « fichier trop volumineux ».
+ */
+function tooLargeBody(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'FST_ERR_CTP_BODY_TOO_LARGE'
+  );
 }
 
 /**
@@ -18,6 +33,18 @@ export function errorBody(error: unknown): { error: Record<string, unknown> } {
  */
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
+    if (tooLargeBody(error)) {
+      request.log.warn({ url: request.url }, 'corps de requête au-delà de la limite');
+      reply.status(413).send(
+        errorBody(
+          new ValidationError('Le fichier envoyé dépasse la taille maximale.', {
+            code: 'UPLOAD_TOO_LARGE',
+          }),
+        ),
+      );
+      return;
+    }
+
     const appError = toAppError(error);
 
     if (appError.category === 'internal') {

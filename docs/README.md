@@ -29,6 +29,10 @@
     multi-plateformes, versions et décisions de relecture.
 16. **`15-mise-en-oeuvre-etape-5.md`** — qualité, fact-checking, dashboard, comptes et
     publication manuelle niveau C traçable.
+17. **`16-mise-en-oeuvre-etape-6.md`** — entrée vocale et transcription locale :
+    enregistrement → téléversement vérifié → file → whisper.cpp → relecture → envoi
+    confirmé, les trois défauts corrigés en chemin, et ce qui reste de l'étape 6
+    (import de médias, sauvegarde/restauration, D3).
 
 
 ## Règles de rédaction

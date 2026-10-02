@@ -93,6 +93,19 @@ export const envSchema = z.object({
     max: 20_480,
     label: 'MEDIA_MAX_UPLOAD_MB',
   }),
+  /**
+   * Durée maximale d'un enregistrement vocal, en secondes.
+   *
+   * Vérifiée **après décodage** (le worker connaît la durée réelle, l'API non) :
+   * un enregistrement plus long échoue en `AUDIO_TOO_LONG`, sans reprise. Deux
+   * heures de parole seraient de toute façon inexploitables pour un entretien.
+   */
+  MEDIA_MAX_DURATION_S: integer({
+    default: 900,
+    min: 10,
+    max: 14_400,
+    label: 'MEDIA_MAX_DURATION_S',
+  }),
   S3_ENDPOINT: optionalText(),
   S3_REGION: optionalText(64),
   S3_BUCKET: optionalText(200),

@@ -43,6 +43,11 @@ export function e2eConfig(): Config {
       SESSION_SECRET: 'e2e-session-secret-0123456789abcdef',
       ENCRYPTION_KEY: 'e'.repeat(64),
       DATABASE_URL: process.env.E2E_DATABASE_URL ?? `file:${join(E2E_DATA_DIR, 'app.db')}`,
+      // Les audios du parcours vivent sous `data/e2e/` comme la base : le
+      // répertoire est supprimé au début de chaque exécution, et un
+      // enregistrement de test ne doit pas atterrir dans les médias de tous les
+      // jours (docs/09 §11).
+      MEDIA_ROOT: join(E2E_DATA_DIR, 'media'),
       PROMPTS_DIR: E2E_PROMPTS_DIR,
       LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? 'warn',
       LOG_PRETTY: 'false',

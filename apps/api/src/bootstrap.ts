@@ -1,8 +1,10 @@
+import { isAbsolute, resolve } from 'node:path';
 import {
   applyMigrations,
   countJobsByStatus,
   createConversationStore,
   createEditorialStore,
+  createMediaStore,
   createProjectMemoryStore,
   createPublishingStore,
   getJob,
@@ -30,7 +32,19 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
-import { createJobRegistry, generateContentSpec, SqliteQueue, type Queue } from '@aia/queue';
+import {
+  createJobRegistry,
+  generateContentSpec,
+  transcribeMediaSpec,
+  SqliteQueue,
+  type Queue,
+} from '@aia/queue';
+import {
+  LocalStorageAdapter,
+  WhisperCppTranscriber,
+  type StorageAdapter,
+  type Transcriber,
+} from '@aia/media';
 import {
   getSystemHealth,
   type ConversationPorts,
@@ -74,6 +88,10 @@ export interface ApiContext {
   /** Orchestration éditoriale : plan (synchrone) et mise en file des rédactions. */
   editorial: EditorialFeatureDeps;
   publishing: ReturnType<typeof createPublishingStore>;
+  media: ReturnType<typeof createMediaStore>;
+  mediaStorage: StorageAdapter;
+  transcriber: Transcriber;
+  mediaQueue: Pick<Queue, 'enqueue'>;
   health(): SystemHealth;
   jobs(filter?: { statuses?: JobRow['status'][]; limit?: number }): JobRow[];
   job(id: string): JobRow | undefined;
@@ -99,6 +117,8 @@ export function buildApi(
      * les jobs enfilés sans exécuter de worker (docs/02 §5).
      */
     editorialQueue?: Pick<Queue, 'enqueue'>;
+    mediaQueue?: Pick<Queue, 'enqueue'>;
+    transcriber?: Transcriber;
   } = {},
 ): ApiContext {
   const config = overrides.config ?? loadConfig();
@@ -257,21 +277,21 @@ export function buildApi(
     newId: () => uuidv7(clock.nowMs()),
   };
 
-  const producerQueue: Pick<Queue, 'enqueue'> =
-    overrides.editorialQueue ??
-    (() => {
-      const registry = createJobRegistry();
-      registry.registerSpec(generateContentSpec);
-      return new SqliteQueue({
-        db: handle,
-        registry,
-        clock,
-        random: createSystemRandom(),
-        logger,
-        leaseMs: config.env.JOB_LEASE_MS,
-        offline: config.env.OFFLINE_MODE,
-      });
-    })();
+  const defaultProducerQueue = (() => {
+    const registry = createJobRegistry();
+    registry.registerSpec(generateContentSpec);
+    registry.registerSpec(transcribeMediaSpec);
+    return new SqliteQueue({
+      db: handle,
+      registry,
+      clock,
+      random: createSystemRandom(),
+      logger,
+      leaseMs: config.env.JOB_LEASE_MS,
+      offline: config.env.OFFLINE_MODE,
+    });
+  })();
+  const producerQueue: Pick<Queue, 'enqueue'> = overrides.editorialQueue ?? defaultProducerQueue;
 
   const editorial: EditorialFeatureDeps = {
     memory,
@@ -290,6 +310,19 @@ export function buildApi(
     logger,
   };
   const publishing = createPublishingStore(handle, () => clock.nowMs());
+  const media = createMediaStore(handle, () => clock.nowMs());
+  const mediaStorage = new LocalStorageAdapter(config.paths.mediaRoot);
+  const modelPath = isAbsolute(config.env.WHISPER_MODEL_PATH)
+    ? config.env.WHISPER_MODEL_PATH
+    : resolve(config.paths.root, config.env.WHISPER_MODEL_PATH);
+  const transcriber =
+    overrides.transcriber ??
+    new WhisperCppTranscriber({
+      whisperBin: config.env.WHISPER_BIN,
+      ffmpegBin: config.env.FFMPEG_BIN,
+      modelPath,
+    });
+  const mediaQueue = overrides.mediaQueue ?? defaultProducerQueue;
 
   return {
     config,
@@ -303,6 +336,10 @@ export function buildApi(
     conversationFeature,
     editorial,
     publishing,
+    media,
+    mediaStorage,
+    transcriber,
+    mediaQueue,
     health: () => getSystemHealth(ports),
     jobs: (filter = {}) => listJobs(handle, filter),
     job: (id) => getJob(handle, id),

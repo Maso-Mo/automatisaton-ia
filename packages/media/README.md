@@ -1,23 +1,59 @@
-# `@aia/media` — non implémenté (étapes 3, 6 et 7)
+# `@aia/media` — stockage audio et transcription locale
 
-Ce paquet existe dans l'arborescence parce que les frontières du monorepo sont
-fixées dès l'étape 1 (docs/02 §5). Il ne contient **aucun code à l'étape 1**, et
-c'est volontaire : la règle est « une table d'abord, le pipeline ensuite », et son
-équivalent ici est « un paquet d'abord, son implémentation ensuite — jamais un
-paquet rempli de code provisoire » (docs/10 §1.3).
+L'étape 6 implémente ici la frontière média minimale nécessaire à l'entrée
+vocale : stockage local, validation par signature, normalisation WAV mono 16 kHz
+avec FFmpeg et transcription avec `whisper-cli`.
 
 Ce qui arrivera ici, et quand :
 
 | Étape | Contenu | Document de référence |
 |---|---|---|
-| 3 | Ingestion d'un fichier, déduplication par hash, `ffprobe`, transcription locale (`Transcriber`) | docs/10 §4.3 |
-| 6 | Bibliothèque de médias : vignettes, posters, versions verticales | docs/10 §4.6 |
+| 6 | Entrée vocale, déduplication par hash et transcription locale (`Transcriber`) | docs/16 |
 | 7 | Pipeline vidéo FFmpeg : découpe, silences, sous-titres, burn-in, export | docs/10 §4.7 |
 
-Contrats déjà figés qui devront être respectés à l'implémentation (docs/02 §9.4,
-§9.5, §9.6) : `StorageAdapter`, `Transcriber`, `FFmpegRunner` — avec des fonctions
-**pures** pour compiler un plan de montage en `string[]`, testables sans exécuter
-FFmpeg.
+Les arguments FFmpeg et whisper.cpp sont construits par des fonctions pures et
+les processus sont lancés sans shell. Les noms envoyés par le navigateur ne sont
+jamais utilisés comme chemins de stockage.
 
-Tant que ce paquet est vide, un service absent (FFmpeg, whisper) est traité
-« dégradé » et non « bloquant » (docs/02 §10).
+Un binaire ou un modèle absent est traité comme une capacité dégradée : l'entrée
+texte reste disponible.
+
+## Ce que le paquet contient (étape 6)
+
+| Fichier | Rôle |
+|---|---|
+| `src/index.ts` | `StorageAdapter` (`LocalStorageAdapter`), détection de format par signature, `voiceStorageKey`, `sha256`, `buildNormalizeAudioArgs`, `buildWhisperArgs`, `parseWhisperJson`, `WhisperCppTranscriber`, `ScriptedTranscriber` |
+| `src/retention.ts` | `DEFAULT_AUDIO_RETENTION_MS`, `decideAudioPurge` (règle pure), `sweepOrphanAudio` (suppression fichier **puis** ligne) |
+| `src/index.test.ts` | Les tests, sans binaire : un `CommandRunner` injecté écrit de **vrais** fichiers |
+
+Le paquet ne lit **aucune** variable d'environnement : les chemins des binaires et
+du modèle lui sont passés en options. C'est `apps/worker/src/bootstrap.ts` qui les
+lit depuis `@aia/config` (`WHISPER_BIN`, `WHISPER_MODEL_PATH`, `FFMPEG_BIN`), ce
+qui permet aux tests d'injecter un autre moteur sans toucher à l'environnement.
+
+## Installation du moteur local
+
+```bash
+# FFmpeg (déjà présent sur ce poste : n9.0.2)
+sudo pacman -S ffmpeg          # ou apt install ffmpeg
+
+# whisper.cpp : le binaire doit s'appeler whisper-cli, ou être nommé par WHISPER_BIN
+# Le modèle doit exister au chemin WHISPER_MODEL_PATH (data/models/ggml-small.bin par défaut)
+```
+
+Sans binaire ni modèle, `GET /media/capabilities` répond `available: false` avec
+la raison exacte, l'écran l'affiche, et le bouton d'enregistrement reste inactif :
+rien n'échoue en silence.
+
+## Purge des audios orphelins (docs/03 §12.1)
+
+```bash
+pnpm media:purge                                  # simulation (par défaut)
+pnpm media:purge --apply                          # suppression réelle
+pnpm media:purge -- --apply --retention-days=7 --limit=500
+```
+
+Un audio **rattaché à un message n'est jamais touché** : c'est la preuve de ce qui
+a été publié. Seuls les brouillons (transcrits mais jamais envoyés) sortent, après
+la fenêtre de rétention (trente jours par défaut).
+

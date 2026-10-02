@@ -17,6 +17,7 @@ import {
   planProposals,
   stageSummary,
 } from './state';
+import { VoiceInput } from './VoiceInput';
 
 /**
  * Écran « Conversation » de l'étape 3 : discuter par texte avec l'assistant,
@@ -125,6 +126,12 @@ export function ConversationView() {
     },
     onError: (cause: Error) => setError(cause.message),
   });
+
+  const receiveTurn = (result: Awaited<ReturnType<typeof api.sendMessage>>): void => {
+    lastAssistant.current = result.message.id;
+    setLiveMessages((current) => mergeMessages(current, [result.userMessage, result.message]));
+    void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+  };
 
   const accept = useMutation({
     mutationFn: (messageId: string) =>
@@ -282,6 +289,13 @@ export function ConversationView() {
             />
           )}
 
+          <VoiceInput
+            conversationId={conversationId}
+            disabled={send.isPending}
+            onSent={receiveTurn}
+            onError={setError}
+          />
+
           <form
             className="grid gap-2"
             onSubmit={(event) => {
@@ -355,6 +369,9 @@ function MessageBubble({ message }: { message: MessageView }) {
     >
       <div className="flex items-center gap-2 text-xs text-slate-500">
         <span className="font-medium">{isUser ? 'Vous' : 'Assistant'}</span>
+        {isUser && message.inputMode === 'voice' && (
+          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-800">voix relue</span>
+        )}
         <span>{formatRelative(message.createdAt)}</span>
         {!isUser && message.costMicroUsd > 0 && (
           <span className="ml-auto">

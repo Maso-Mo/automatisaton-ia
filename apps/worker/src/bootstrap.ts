@@ -1,8 +1,10 @@
 import { hostname } from 'node:os';
+import { isAbsolute, resolve } from 'node:path';
 import {
   applyMigrations,
   createConversationStore,
   createEditorialStore,
+  createMediaStore,
   createProjectMemoryStore,
   missingTables,
   openDatabase,
@@ -19,6 +21,7 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createJobRegistry, generateContentSpec, SqliteQueue, type JobRegistry } from '@aia/queue';
+import { LocalStorageAdapter, WhisperCppTranscriber, type Transcriber } from '@aia/media';
 import { createSystemClock, createSystemRandom, uuidv7, type Clock } from '@aia/shared';
 import {
   PLATFORM_WRITER_AGENT,
@@ -34,6 +37,7 @@ import {
 } from '@aia/ai';
 import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
 import { createGenerateContentHandler } from './handlers/generate-content';
+import { createTranscribeMediaHandler } from './handlers/transcribe-media';
 import { createNoopHandler, createScriptedProviderFactory } from './handlers/noop';
 import type { WriterProviderFactory } from './features/platform-writer';
 import { createWorkerLoop, type WorkerLoop } from './loop';
@@ -133,7 +137,7 @@ export interface WorkerContext {
 }
 
 export function buildWorker(
-  overrides: { config?: Config; logger?: AppLogger } = {},
+  overrides: { config?: Config; logger?: AppLogger; transcriber?: Transcriber } = {},
 ): WorkerContext {
   const config = overrides.config ?? loadConfig();
   ensureLocalDirectories(config);
@@ -262,6 +266,32 @@ export function buildWorker(
       },
     }),
   });
+
+  const media = createMediaStore(handle, () => clock.nowMs());
+  const storage = new LocalStorageAdapter(config.paths.mediaRoot);
+  const configuredModelPath = config.env.WHISPER_MODEL_PATH;
+  const transcriber =
+    overrides.transcriber ??
+    new WhisperCppTranscriber({
+      whisperBin: config.env.WHISPER_BIN,
+      ffmpegBin: config.env.FFMPEG_BIN,
+      modelPath: isAbsolute(configuredModelPath)
+        ? configuredModelPath
+        : resolve(config.paths.root, configuredModelPath),
+    });
+
+  registry.register(
+    createTranscribeMediaHandler({
+      media,
+      storage,
+      transcriber,
+      clock,
+      // Le plafond est validé **après** décodage : l'en-tête d'un fichier ne dit
+      // pas la vérité sur sa durée, et un WebM tronqué peut annoncer 5 s pour
+      // 40 min. Une valeur ici évite qu'un seul enregistrement bloque le worker.
+      maxDurationMs: config.env.MEDIA_MAX_DURATION_S * 1_000,
+    }),
+  );
 
   const workerId = `worker-${hostname()}-${uuidv7().slice(-8)}`;
   const queue = new SqliteQueue({

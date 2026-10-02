@@ -7,6 +7,7 @@ import { registerProjectRoutes } from './routes/projects';
 import { registerConversationRoutes } from './routes/conversations';
 import { registerEditorialRoutes } from './routes/editorial';
 import { registerPublishingRoutes } from './routes/publishing';
+import { registerMediaRoutes } from './routes/media';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -22,13 +23,19 @@ export function buildServer(context: ApiContext): FastifyInstance {
     trustProxy: false,
   });
 
+  app.addContentTypeParser(
+    /^(audio\/.+|video\/webm|application\/ogg|application\/octet-stream)(?:;.*)?$/i,
+    { parseAs: 'buffer' },
+    (_request, body, done) => done(null, body),
+  );
+
   registerSecurity(app, context);
   registerErrorHandler(app);
 
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 5 — revue et validation humaines',
+    step: 'étape 6 — entrée vocale et transcription locale',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -52,6 +59,11 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'GET /conversations/:id',
       'GET /conversations/:id/messages',
       'POST /conversations/:id/messages',
+      'GET /media/capabilities',
+      'POST /conversations/:id/voice',
+      'GET /conversations/:id/voice/:assetId/transcript',
+      'DELETE /conversations/:id/voice/:assetId',
+      'POST /conversations/:id/voice/:assetId/send',
       'POST /conversations/:id/messages/:messageId/proposals',
       'POST /conversations/:id/close',
       'POST /conversations/:id/reopen',
@@ -85,6 +97,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerJobRoutes(app, context);
   registerProjectRoutes(app, context);
   registerConversationRoutes(app, context);
+  registerMediaRoutes(app, context);
   registerEditorialRoutes(app, context);
   registerPublishingRoutes(app, context);
 

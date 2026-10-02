@@ -87,12 +87,19 @@ export function memoryPackForProject(deps: ConversationFeatureDeps, projectId: s
 export async function runConversationTurn(
   deps: ConversationFeatureDeps,
   conversationId: string,
-  input: { content: string },
+  input: {
+    content: string;
+    inputMode?: 'text' | 'voice';
+    audioAssetId?: string | null;
+    transcriptStatus?: string | null;
+  },
 ): Promise<RunTurnResult> {
   // 1. Le message utilisateur entre en base **avant** l'appel.
   const { message: userMessage } = appendUserMessage(deps.ports, conversationId, {
     content: input.content,
-    inputMode: 'text',
+    inputMode: input.inputMode ?? 'text',
+    audioAssetId: input.audioAssetId ?? null,
+    transcriptStatus: input.transcriptStatus ?? null,
   });
 
   // 2 et 3. Complétude recalculée localement, puis paquet de mémoire borné.
