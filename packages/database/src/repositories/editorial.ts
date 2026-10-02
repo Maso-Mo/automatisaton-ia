@@ -20,6 +20,7 @@ import {
 import type { DatabaseHandle } from '../client';
 import {
   contentItems,
+  contentClaims,
   contentReviewNotes,
   contentSubjects,
   contentVersions,
@@ -151,6 +152,25 @@ export interface EditorialNote {
   createdAt: number;
 }
 
+export interface EditorialClaim {
+  id: string;
+  contentVersionId: string;
+  claim: string;
+  claimType: 'chiffre' | 'fait' | 'experience' | 'opinion' | 'prediction' | 'generalite';
+  verifiability: 'verifiable' | 'non_verifiable' | 'depend_du_contexte';
+  evidence: string | null;
+  evidenceSource: 'project_fact' | 'news_item' | 'user' | 'web' | 'none';
+  risk: 'faible' | 'moyen' | 'eleve';
+  status: 'supported' | 'unsupported' | 'needs_user_confirmation' | 'rejected';
+  userConfirmedAt: number | null;
+  createdAt: number;
+}
+
+export type NewEditorialClaimInput = Omit<
+  EditorialClaim,
+  'id' | 'contentVersionId' | 'userConfirmedAt' | 'createdAt'
+>;
+
 export interface NewEditorialAngleInput {
   hook: string;
   angleType: AngleType;
@@ -221,6 +241,7 @@ export interface EditorialItemPatch {
   editRatio?: number | null;
   regeneratedCount?: number;
   approvedAt?: number | null;
+  publishedAt?: number | null;
   archivedAt?: number | null;
 }
 
@@ -236,6 +257,7 @@ type AngleRow = typeof subjectAngles.$inferSelect;
 type ItemRow = typeof contentItems.$inferSelect;
 type VersionRow = typeof contentVersions.$inferSelect;
 type NoteRow = typeof contentReviewNotes.$inferSelect;
+type ClaimRow = typeof contentClaims.$inferSelect;
 
 /** Colonne `_json` d'un tableau de chaînes : illisible → tableau vide, jamais une exception. */
 function decodeStringArray(raw: string | null): string[] {
@@ -328,6 +350,22 @@ function toNote(row: NoteRow): EditorialNote {
   };
 }
 
+function toClaim(row: ClaimRow): EditorialClaim {
+  return {
+    id: row.id,
+    contentVersionId: row.content_version_id,
+    claim: row.claim,
+    claimType: row.claim_type as EditorialClaim['claimType'],
+    verifiability: row.verifiability as EditorialClaim['verifiability'],
+    evidence: row.evidence,
+    evidenceSource: (row.evidence_source ?? 'none') as EditorialClaim['evidenceSource'],
+    risk: row.risk as EditorialClaim['risk'],
+    status: row.status as EditorialClaim['status'],
+    userConfirmedAt: row.user_confirmed_at,
+    createdAt: row.created_at,
+  };
+}
+
 export interface EditorialStoreImpl {
   createPlan(input: { projectId: string; subjects: readonly NewEditorialSubjectInput[] }): {
     subjects: EditorialSubject[];
@@ -356,6 +394,9 @@ export interface EditorialStoreImpl {
   getVersion(id: string): EditorialVersion | null;
   listVersions(contentItemId: string): EditorialVersion[];
   approveVersion(versionId: string, approvedBy: string | null): EditorialVersion;
+  updateVersionQuality(versionId: string, qualityScore: number): EditorialVersion;
+  replaceClaims(contentVersionId: string, claims: readonly NewEditorialClaimInput[]): void;
+  listClaims(contentVersionId: string): EditorialClaim[];
 
   replaceNotes(
     contentItemId: string,
@@ -694,6 +735,7 @@ export function createEditorialStore(
       if (patch.editRatio !== undefined) set.edit_ratio = patch.editRatio;
       if (patch.regeneratedCount !== undefined) set.regenerated_count = patch.regeneratedCount;
       if (patch.approvedAt !== undefined) set.approved_at = patch.approvedAt;
+      if (patch.publishedAt !== undefined) set.published_at = patch.publishedAt;
       if (patch.archivedAt !== undefined) set.archived_at = patch.archivedAt;
       handle.db.update(contentItems).set(set).where(eq(contentItems.id, id)).run();
       return itemOrThrow(id);
@@ -771,6 +813,51 @@ export function createEditorialStore(
         .run();
       return versionOrThrow(versionId);
     },
+
+    updateVersionQuality: (versionId, qualityScore) => {
+      versionOrThrow(versionId);
+      handle.db
+        .update(contentVersions)
+        .set({ quality_score: qualityScore })
+        .where(eq(contentVersions.id, versionId))
+        .run();
+      return versionOrThrow(versionId);
+    },
+
+    replaceClaims: (contentVersionId, claims) => {
+      versionOrThrow(contentVersionId);
+      handle.db
+        .delete(contentClaims)
+        .where(eq(contentClaims.content_version_id, contentVersionId))
+        .run();
+      for (const claim of claims) {
+        handle.db
+          .insert(contentClaims)
+          .values({
+            id: newId(),
+            content_version_id: contentVersionId,
+            claim: claim.claim,
+            claim_type: claim.claimType,
+            verifiability: claim.verifiability,
+            evidence: claim.evidence,
+            evidence_source: claim.evidenceSource,
+            risk: claim.risk,
+            status: claim.status,
+            user_confirmed_at: null,
+            created_at: now(),
+          })
+          .run();
+      }
+    },
+
+    listClaims: (contentVersionId) =>
+      handle.db
+        .select()
+        .from(contentClaims)
+        .where(eq(contentClaims.content_version_id, contentVersionId))
+        .orderBy(asc(contentClaims.created_at))
+        .all()
+        .map(toClaim),
 
     /**
      * Les remarques d'un contenu sont **remplacées par auteur** : régénérer ne

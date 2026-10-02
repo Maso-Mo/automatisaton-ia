@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   approveContent,
   approveContentBodySchema,
+  CONTENT_STATE_TRANSITIONS,
   contentBundle,
   contentHistory,
   contentListQuerySchema,
@@ -9,7 +10,7 @@ import {
   editContentBodySchema,
   generateContentBodySchema,
   listProjectContent,
-  markInReview,
+  MAX_REGENERATIONS_PER_ITEM,
   parseOrThrow,
   regenerateContentBodySchema,
   rejectAngle,
@@ -25,13 +26,34 @@ import {
   type EditorialPorts,
   type SubjectAngle,
 } from '@aia/core';
-import { allContentTargets, NotFoundError, type TargetDraft } from '@aia/shared';
+import {
+  allContentTargets,
+  ANGLE_TYPES,
+  ANGLE_TYPE_LABELS,
+  CONTENT_GENERATION_LABELS,
+  CONTENT_GENERATIONS,
+  CONTENT_NOTE_SEVERITIES,
+  CONTENT_NOTE_SEVERITY_LABELS,
+  CONTENT_NOTE_TYPE_LABELS,
+  CONTENT_NOTE_TYPES,
+  CONTENT_STATES,
+  CONTENT_STATE_LABELS,
+  CONTENT_TARGET_SECTION_LABELS,
+  contentTargetSpec,
+  NotFoundError,
+  SKILL_COVERAGES,
+  SKILL_COVERAGE_LABELS,
+  SUBJECT_STATUSES,
+  SUBJECT_STATUS_LABELS,
+  type TargetDraft,
+} from '@aia/shared';
 import type { ApiContext } from '../bootstrap';
 import {
   enqueueContentGeneration,
   enqueueContentRegeneration,
   generateEditorialPlan,
 } from '../features/editorial';
+import { reviewContent } from '../features/review';
 
 /**
  * Editorial : plan, sujets, angles, contenus (docs/10 §4.3, §4.4).
@@ -221,7 +243,7 @@ export function registerEditorialRoutes(app: FastifyInstance, context: ApiContex
   /** L'ouverture de l'ecran de relecture : l'acte est enregistre, il n'est pas devine. */
   app.post('/content/:contentId/review', async (request) => {
     const { contentId } = request.params as { contentId: string };
-    return { content: markInReview(ports, contentId) };
+    return { content: await reviewContent({ ports, agents: deps.agents }, contentId) };
   });
 
   /**
@@ -276,4 +298,59 @@ export function registerEditorialRoutes(app: FastifyInstance, context: ApiContex
       }),
     };
   });
+
+  /**
+   * Le **vocabulaire de l'écran de revue** : cibles, états, transitions, libellés
+   * de version et de remarque, plus les limites qui expliquent un refus.
+   *
+   * Pourquoi une route plutôt que des constantes recopiées dans React : parce que
+   * l'interface ne doit pas pouvoir inventer une valeur que le domaine refuserait.
+   * Si `MAX_REGENERATIONS_PER_ITEM` passe de 3 à 5, ou si une cible disparaît, la
+   * liste des cibles cochables et le compteur affiché changent **sans toucher** à
+   * `apps/web` — et une valeur sans libellé ne compile pas côté serveur.
+   *
+   * Elle est servie sans identifiant : c'est le même vocabulaire pour tous les
+   * projets, et le charger une fois suffit à l'écran.
+   */
+  app.get('/editorial/vocabulary', () => ({
+    targets: allContentTargets().map((target) => ({
+      ...contentTargetSpec(target),
+      sectionLabel: CONTENT_TARGET_SECTION_LABELS[target],
+    })),
+    contentStates: CONTENT_STATES.map((state) => ({
+      value: state,
+      label: CONTENT_STATE_LABELS[state],
+      next: CONTENT_STATE_TRANSITIONS[state],
+    })),
+    generations: CONTENT_GENERATIONS.map((generation) => ({
+      value: generation,
+      label: CONTENT_GENERATION_LABELS[generation],
+    })),
+    noteTypes: CONTENT_NOTE_TYPES.map((noteType) => ({
+      value: noteType,
+      label: CONTENT_NOTE_TYPE_LABELS[noteType],
+    })),
+    noteSeverities: CONTENT_NOTE_SEVERITIES.map((severity) => ({
+      value: severity,
+      label: CONTENT_NOTE_SEVERITY_LABELS[severity],
+    })),
+    limits: { maxRegenerationsPerItem: MAX_REGENERATIONS_PER_ITEM },
+    /**
+     * Le plan éditorial affiche l'état d'un sujet et le type d'un angle : ces
+     * libellés viennent d'ici, comme ceux des contenus. Un état ajouté au domaine
+     * apparaît alors sans modification d'écran.
+     */
+    subjectStatuses: SUBJECT_STATUSES.map((status) => ({
+      value: status,
+      label: SUBJECT_STATUS_LABELS[status],
+    })),
+    skillCoverages: SKILL_COVERAGES.map((coverage) => ({
+      value: coverage,
+      label: SKILL_COVERAGE_LABELS[coverage],
+    })),
+    angleTypes: ANGLE_TYPES.map((angleType) => ({
+      value: angleType,
+      label: ANGLE_TYPE_LABELS[angleType],
+    })),
+  }));
 }

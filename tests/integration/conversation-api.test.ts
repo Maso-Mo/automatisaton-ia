@@ -104,7 +104,9 @@ describe('API de la conversation (docs/10 §4.2, docs/05 §3)', () => {
       step: string;
       endpoints: string[];
     };
-    expect(body.step).toContain('étape 4');
+    // La racine annonce l'étape courante — l'étape 5 ajoute la revue humaine
+    // (approbation, rejet, régénération) sans retirer les routes de l'étape 4.
+    expect(body.step).toContain('étape 5');
     expect(body.endpoints).toContain('POST /conversations/:id/messages');
     expect(body.endpoints).toContain('POST /briefs/:briefId/validation');
     expect(body.endpoints).toContain('GET /events/conversations/:id');

@@ -68,6 +68,6 @@ export const generateContentSpec: JobSpec<GenerateContentInput> = {
   // contenu, sinon deux régénérations du même angle se dédupliqueraient à tort.
   dedupeKey: (input) =>
     input.contentItemId
-      ? `content:regenerate:${input.contentItemId}`
+      ? `content:${input.mode}:${input.contentItemId}`
       : `content:${input.angleId}:${input.mode}:${[...input.targets].sort().join(',')}`,
 };

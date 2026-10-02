@@ -11,6 +11,7 @@
 export * from './env';
 export * from './load';
 export * from './redact';
+export * from './token-encryption';
 
 /**
  * `ConfigError` est réexporté ici pour que les points d'entrée (API, worker,

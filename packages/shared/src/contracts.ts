@@ -285,3 +285,47 @@ export const contentDraftsOutputSchema = z.object({
   drafts: z.record(z.string().min(1).max(40), targetDraftSchema),
 });
 export type ContentDraftsOutput = z.infer<typeof contentDraftsOutputSchema>;
+
+// --- Étape 5 : revue éditoriale et factuelle -----------------------------
+
+/** Le critique juge et décrit un défaut ; il ne possède volontairement aucun champ de réécriture. */
+export const criticOutputSchema = z.object({
+  verdict: z.enum(['pass', 'revise', 'reject']),
+  score: z.number().int().min(0).max(100),
+  notes: z
+    .array(
+      z.object({
+        type: z.enum(['qualite', 'ton', 'repetition', 'clickbait', 'generique', 'plateforme']),
+        severity: z.enum(['info', 'basse', 'moyenne', 'haute']),
+        message: z.string().min(3).max(500),
+        anchor_text: z.string().min(1).max(500).nullish(),
+      }),
+    )
+    .max(20),
+  repetition_report: z.string().max(1_000).nullable(),
+});
+export type CriticOutput = z.infer<typeof criticOutputSchema>;
+
+export const factCheckerOutputSchema = z.object({
+  claims: z
+    .array(
+      z.object({
+        text: z.string().min(2).max(1_000),
+        claim_type: z.enum([
+          'chiffre',
+          'fait',
+          'experience',
+          'opinion',
+          'prediction',
+          'generalite',
+        ]),
+        verifiability: z.enum(['verifiable', 'non_verifiable', 'depend_du_contexte']),
+        risk: z.enum(['faible', 'moyen', 'eleve']),
+        status: z.enum(['supported', 'unsupported', 'needs_user_confirmation', 'rejected']),
+        evidence: z.string().max(1_000).nullable(),
+        evidence_source: z.enum(['project_fact', 'news_item', 'user', 'web', 'none']),
+      }),
+    )
+    .max(30),
+});
+export type FactCheckerOutput = z.infer<typeof factCheckerOutputSchema>;

@@ -5,7 +5,7 @@
 > **La documentation de conception est la source de vérité** : le produit final, son architecture,
 > son modèle de données, ses pipelines, sa stratégie de tests et son plan en 12 étapes.
 >
-> **Les étapes 1 à 4 sont implémentées** :
+> **Les étapes 1 à 5 sont implémentées** :
 > - **étape 1** (fondations exécutables) : monorepo pnpm, API Fastify, worker, base SQLite migrée,
 >   file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic ;
 > - **étape 2** (mémoire des projets) : projets, faits typés avec états de vérification, sélection
@@ -16,9 +16,12 @@
 >   confirmés**, sélection d'un angle, rédaction d'un lot multi-plateformes (LinkedIn, Reddit,
 >   TikTok, YouTube) **par le worker**, versions conservées, contrôle local des limites de chaque
 >   plateforme, relecture et approbation humaines.
+> - **étape 5** (qualité et publication manuelle) : critique et vérification factuelle séparées,
+>   dashboard de revue, comptes aux jetons chiffrés, paquets manuels niveau C pour LinkedIn,
+>   Reddit, TikTok et YouTube, puis statut publié traçable avec le texte exact.
 >
-> Le produit ne **publie** toujours rien (aucun connecteur), n'accepte pas encore d'entrée média et
-> ne vérifie pas les affirmations des textes : ces parties arrivent aux étapes suivantes.
+> Le produit ne publie par **aucune API** : la publication est volontairement manuelle et suivie.
+> L'entrée média, la planification et les niveaux A/B arrivent aux étapes suivantes.
 >
 > Règle issue du cahier des charges (§46 — Priorité absolue) : *ne pas commencer à coder avant
 > d'avoir l'architecture, le modèle de données, les flux, les responsabilités, les interfaces
@@ -28,7 +31,8 @@
 >
 > Comptes rendus d'exécution : **[docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md)**,
 > **[docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md)** et
-> **[docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md)**.
+> **[docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md)** et
+> **[docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md)**.
 
 ---
 
@@ -92,10 +96,11 @@ techniquement.
 | [docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md) | **Compte rendu d'exécution de l'étape 1** : décisions prises (M1 à M12), ce qui n'a pas été construit, tests, points ouverts |
 | [docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md) | **Compte rendu d'exécution de l'étape 3** : conversation IA et fiche maître — décisions (M1 à M16), ce qui n'a pas été construit, tests, points ouverts |
 | [docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md) | **Compte rendu d'exécution de l'étape 4** : génération éditoriale — décisions (M1 à M20), ce qui n'a pas été construit, tests, points ouverts |
+| [docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md) | **Compte rendu d'exécution de l'étape 5** : qualité, dashboard et publication manuelle — décisions, limites vérifiées, tests et périmètre |
 
 ---
 
-## 3bis. Démarrage rapide (étapes 1 à 4)
+## 3bis. Démarrage rapide (étapes 1 à 5)
 
 ```bash
 pnpm install                  # dépendances (better-sqlite3 compilé localement)
@@ -105,27 +110,25 @@ openssl rand -hex 32          #   ENCRYPTION_KEY
 # puis DEEPSEEK_API_KEY=sk-... pour que la conversation fonctionne réellement
 
 pnpm check:env                # état de l'environnement (bloquant ou dégradé)
-pnpm db:migrate               # crée data/app.db et les 27 tables des étapes 1 à 4
+pnpm db:migrate               # crée data/app.db et les 32 tables des étapes 1 à 5
 pnpm dev                      # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
 
 pnpm job:noop -- --wait       # sonde de bout en bout : statut, événements, coût calculé
 pnpm verify                   # types, lint, tests, migrations, frontières, canari, environnement
 ```
 
-L'interface (`http://127.0.0.1:5173`) a trois onglets :
+L'interface (`http://127.0.0.1:5173`) a cinq onglets :
 
 - **Conversation** : on discute par texte avec l'assistant, on accepte ou refuse les écritures
   proposées (chacune cite vos mots), et on relit puis valide la fiche maître ;
 - **Projets** : la mémoire structurée — projets, faits typés, contexte déterministe ;
+- **Plan éditorial** : sujets, angles, cibles et génération suivie en temps réel ;
+- **Revue des contenus** : contrôles, versions, approbation et paquet manuel ;
 - **Diagnostic** : base migrée, worker actif, clé IA présente, budget du jour.
 
-Sans clé DeepSeek, tout démarre et fonctionne sauf l'assistant : l'appel échoue avec
-« clé absente », et l'écran de diagnostic l'indique. La **génération éditoriale** existe
-désormais côté serveur (`POST /projects/:id/plan`, `POST /projects/:id/content`, relecture et
-approbation) et s'exécute dans le worker, mais **aucun écran ne la pilote encore** : les trois
-onglets ci-dessus sont ceux de l'étape 3. Pas de publication, pas de vérification des
-affirmations, pas d'entrée média (`docs/10` §4.4, « Interdits ») — voir
-[docs/14](docs/14-mise-en-oeuvre-etape-4.md) §3.
+Sans clé DeepSeek, le diagnostic et les fonctions locales démarrent, mais les appels IA réels
+échouent explicitement ; les tests et l'E2E utilisent des fournisseurs scriptés. La publication
+est manuelle et ne dépend d'aucune API externe. Voir [docs/15](docs/15-mise-en-oeuvre-etape-5.md).
 
 Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg et whisper ne sont **pas** requis à ce stade
 (leur absence est signalée « dégradé », jamais bloquante).
@@ -207,4 +210,3 @@ complexité, ce qu'il ne faut **pas** construire à ce stade) :
    [docs/11-risques-decisions-et-limites.md](docs/11-risques-decisions-et-limites.md).
 3. Toute étape livrée doit satisfaire **ses critères de sortie** avant de passer à la
    suivante.
-

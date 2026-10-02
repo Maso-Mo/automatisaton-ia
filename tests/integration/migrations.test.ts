@@ -5,6 +5,7 @@ import {
   STEP_ONE_TABLE_NAMES,
   STEP_THREE_TABLE_NAMES,
   STEP_FOUR_TABLE_NAMES,
+  STEP_FIVE_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -41,6 +42,7 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       'content_subjects',
       'subject_angles',
       ...STEP_FOUR_TABLE_NAMES,
+      ...STEP_FIVE_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
@@ -63,6 +65,13 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       'errors',
       'system_health',
       'notifications',
+    ]);
+    expect(STEP_FIVE_TABLE_NAMES).toEqual([
+      'project_platforms',
+      'platform_accounts',
+      'publications',
+      'publication_attempts',
+      'manual_packages',
     ]);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });

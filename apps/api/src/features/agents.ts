@@ -1,5 +1,7 @@
 import {
   createAnglePlannerAgent,
+  createCriticAgent,
+  createFactCheckerAgent,
   createInterviewerAgent,
   createLlmProvider,
   createStrategistAgent,
@@ -7,6 +9,8 @@ import {
   withRecording,
   type Agent,
   type AnglePlannerInput,
+  type CriticInput,
+  type FactCheckerInput,
   type InterviewerInput,
   type PromptSource,
   type StrategistInput,
@@ -21,6 +25,8 @@ import {
   ValidationError,
   type Clock,
   type EditorialPlanOutput,
+  type CriticOutput,
+  type FactCheckerOutput,
   type InterviewerOutput,
   type LlmProviderId,
   type MasterBriefOutput,
@@ -68,6 +74,8 @@ export interface ConversationAgents {
  */
 export interface EditorialAgents {
   anglePlanner(): EditorialAgentBundle<AnglePlannerInput, EditorialPlanOutput>;
+  critic?(): EditorialAgentBundle<CriticInput, CriticOutput>;
+  factChecker?(): EditorialAgentBundle<FactCheckerInput, FactCheckerOutput>;
 }
 
 /** Clé du fournisseur par défaut : jamais lue ailleurs, jamais journalisée. */
@@ -80,7 +88,7 @@ export function createConversationAgents(
 ): ConversationAgents & EditorialAgents {
   const providerId = deps.config.env.LLM_DEFAULT_PROVIDER;
 
-  const modelFor = (task: 'converse' | 'master_brief' | 'angles'): string =>
+  const modelFor = (task: 'converse' | 'master_brief' | 'angles' | 'review' | 'assess'): string =>
     llmModelFor(deps.config.env, task === 'converse' ? 'light' : 'standard');
 
   /**
@@ -109,7 +117,7 @@ export function createConversationAgents(
     const inner = createLlmProvider({
       providerId,
       apiKey: apiKeyForProvider(deps.config, providerId),
-      model: modelFor(task as 'converse' | 'master_brief'),
+      model: modelFor(task as 'converse' | 'master_brief' | 'angles' | 'review' | 'assess'),
       clock: deps.clock,
       localBaseUrl: `${deps.config.env.OLLAMA_BASE_URL}/v1`,
     });
@@ -151,6 +159,14 @@ export function createConversationAgents(
     anglePlanner: () =>
       bind<AnglePlannerInput, EditorialPlanOutput>('strategist', 'angles', (provider, prompt) =>
         createAnglePlannerAgent({ provider, prompt }),
+      ),
+    critic: () =>
+      bind<CriticInput, CriticOutput>('critic', 'review', (provider, prompt) =>
+        createCriticAgent({ provider, prompt }),
+      ),
+    factChecker: () =>
+      bind<FactCheckerInput, FactCheckerOutput>('fact_checker', 'assess', (provider, prompt) =>
+        createFactCheckerAgent({ provider, prompt }),
       ),
   };
 }

@@ -25,6 +25,10 @@
 14. **`13-mise-en-oeuvre-etape-3.md`** — idem pour l'étape 3 (conversation IA et fiche maître) :
     décisions (M1 à M16), ce qui n'a pas été construit, tests, points laissés ouverts, et la
     correspondance avec la numérotation du plan.
+15. **`14-mise-en-oeuvre-etape-4.md`** — génération éditoriale : plan, rédaction
+    multi-plateformes, versions et décisions de relecture.
+16. **`15-mise-en-oeuvre-etape-5.md`** — qualité, fact-checking, dashboard, comptes et
+    publication manuelle niveau C traçable.
 
 
 ## Règles de rédaction

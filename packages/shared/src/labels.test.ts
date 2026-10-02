@@ -1,13 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ANGLE_TYPES,
+  ANGLE_TYPE_LABELS,
+  CONTENT_GENERATION_LABELS,
+  CONTENT_GENERATIONS,
+  CONTENT_NOTE_SEVERITIES,
+  CONTENT_NOTE_SEVERITY_LABELS,
+  CONTENT_NOTE_TYPE_LABELS,
+  CONTENT_NOTE_TYPES,
+  CONTENT_STATES,
+  CONTENT_STATE_LABELS,
+  CONTENT_TARGET_SECTION_LABELS,
+  CONTENT_TARGETS,
   FACT_CATEGORY_LABELS,
   FACT_CATEGORIES,
   FACT_SOURCE_LABELS,
   FACT_SOURCES,
   FACT_VERIFICATION_STATUS_LABELS,
   FACT_VERIFICATION_STATUSES,
+  PLATFORM_IDS,
+  PLATFORM_LABELS,
   PROJECT_STATUSES,
   PROJECT_STATUS_LABELS,
+  SKILL_COVERAGES,
+  SKILL_COVERAGE_LABELS,
+  SUBJECT_STATUSES,
+  SUBJECT_STATUS_LABELS,
 } from './enums';
 
 /**
@@ -26,6 +44,37 @@ describe('libellés d’interface (docs/09 §14)', () => {
       labels: FACT_VERIFICATION_STATUS_LABELS,
     },
     { name: 'FACT_SOURCE_LABELS', values: FACT_SOURCES, labels: FACT_SOURCE_LABELS },
+    { name: 'CONTENT_STATE_LABELS', values: CONTENT_STATES, labels: CONTENT_STATE_LABELS },
+    {
+      name: 'CONTENT_GENERATION_LABELS',
+      values: CONTENT_GENERATIONS,
+      labels: CONTENT_GENERATION_LABELS,
+    },
+    {
+      name: 'CONTENT_NOTE_TYPE_LABELS',
+      values: CONTENT_NOTE_TYPES,
+      labels: CONTENT_NOTE_TYPE_LABELS,
+    },
+    {
+      name: 'CONTENT_NOTE_SEVERITY_LABELS',
+      values: CONTENT_NOTE_SEVERITIES,
+      labels: CONTENT_NOTE_SEVERITY_LABELS,
+    },
+    { name: 'PLATFORM_LABELS', values: PLATFORM_IDS, labels: PLATFORM_LABELS },
+    {
+      name: 'CONTENT_TARGET_SECTION_LABELS',
+      values: CONTENT_TARGETS,
+      labels: CONTENT_TARGET_SECTION_LABELS,
+    },
+    // Le plan éditorial (étape 5) affiche lui aussi des codes du domaine : l'état
+    // d'un sujet, la couverture d'une compétence, le type d'un angle.
+    { name: 'SUBJECT_STATUS_LABELS', values: SUBJECT_STATUSES, labels: SUBJECT_STATUS_LABELS },
+    {
+      name: 'SKILL_COVERAGE_LABELS',
+      values: SKILL_COVERAGES,
+      labels: SKILL_COVERAGE_LABELS,
+    },
+    { name: 'ANGLE_TYPE_LABELS', values: ANGLE_TYPES, labels: ANGLE_TYPE_LABELS },
   ];
 
   it('couvre exactement les valeurs, sans doublon et sans libellé vide', () => {

@@ -4,21 +4,28 @@ import { api, type CheckStatus, type SystemHealth } from './api/client';
 import { JobsSection } from './components/JobsSection';
 import { Metrics } from './components/Metrics';
 import { ConversationView } from './features/conversation/ConversationView';
+import { EditorialView } from './features/editorial/EditorialView';
+import { ReviewView } from './features/editorial/ReviewView';
 import { ProjectsView } from './features/projects/ProjectsView';
 
 /**
- * Application de l'étape 3 : trois vues, sans routeur (un routeur ne se justifie
- * pas pour trois onglets, docs/10 §1.3).
+ * Application de l'étape 5 : cinq vues, sans routeur (un routeur ne se justifie
+ * pas pour cinq onglets, docs/10 §1.3).
  *
+ * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
+ *   les cibles et lancer la génération.
+ * - **Revue des contenus** (étape 5) : une carte par plateforme — relire, corriger,
+ *   approuver ou rejeter, régénérer dans la limite du plafond.
  * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
- *   maître se relit et se valide.
+ *   maître se relit et se valide — c'est elle qui alimente le plan.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
  * - **Diagnostic** (étape 1) : *le socle est-il en état ?*
  *
- * La génération de contenus n'existe pas encore : elle arrive à l'étape suivante.
+ * La publication manuelle niveau C existe ; planification et publication par API
+ * restent réservées aux étapes suivantes.
  */
 
-type View = 'diagnostic' | 'projects' | 'conversation';
+type View = 'diagnostic' | 'projects' | 'conversation' | 'plan' | 'review';
 
 const CHECK_STYLES: Record<CheckStatus, { icon: string; className: string }> = {
   ok: { icon: '✅', className: 'border-emerald-200 bg-emerald-50' },
@@ -39,7 +46,7 @@ const GLOBAL_LABELS: Record<SystemHealth['status'], string> = {
 };
 
 export function App() {
-  const [view, setView] = useState<View>('conversation');
+  const [view, setView] = useState<View>('plan');
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 5_000 });
   const summary = useQuery({
     queryKey: ['jobs-summary'],
@@ -52,12 +59,14 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 3 : conversation par texte et fiche maître. La génération de contenus n’existe pas
-          encore — elle arrive à l’étape suivante.
+          Étape 5 : le produit écrit, les contrôles relisent, vous validez puis publiez avec un
+          paquet manuel traçable. La planification et la publication par API arrivent ensuite.
         </p>
-        <nav className="mt-4 flex gap-2" aria-label="Vues">
+        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
             [
+              ['plan', 'Plan éditorial'],
+              ['review', 'Revue des contenus'],
               ['conversation', 'Conversation'],
               ['projects', 'Projets'],
               ['diagnostic', 'Diagnostic'],
@@ -79,6 +88,10 @@ export function App() {
           ))}
         </nav>
       </header>
+
+      {view === 'plan' && <EditorialView />}
+
+      {view === 'review' && <ReviewView />}
 
       {view === 'conversation' && <ConversationView />}
 

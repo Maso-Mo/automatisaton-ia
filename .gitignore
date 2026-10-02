@@ -57,9 +57,22 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 *.log
 logs/
+nohup.out
 
 # ---------------------------------------------------------------------------
 # Documents de travail non destinés au dépôt
 # ---------------------------------------------------------------------------
 *.docx
 *.odt
+
+# ---------------------------------------------------------------------------
+# Sorties des parcours navigateur (Playwright)
+#
+# Les traces ne sont écrites qu'en cas d'échec (`trace: 'retain-on-failure'`) :
+# elles contiennent des captures d'écran du produit, jamais commitées. La base
+# du parcours, elle, vit sous `data/` et est déjà ignorée.
+# ---------------------------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+.playwright/

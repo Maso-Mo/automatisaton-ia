@@ -124,6 +124,8 @@ export default tseslint.config(
   // 5. `process.env` est autorisé au point de passage unique, dans les outils de
   // ligne de commande (qui s'exécutent avant tout chargement de configuration) et
   // dans les tests (qui doivent simuler un environnement absent ou invalide).
+  // Les configurations des exécuteurs de tests en font partie : elles sont lues
+  // par l'outil, pas par le produit (`vitest.config.ts`, `playwright.config.ts`).
   {
     files: [
       'packages/config/**/*.ts',
@@ -132,6 +134,7 @@ export default tseslint.config(
       '**/*.test.ts',
       'drizzle.config.ts',
       'vitest.config.ts',
+      'playwright.config.ts',
     ],
     rules: {
       'no-restricted-syntax': ['error', DANGEROUS_HTML],

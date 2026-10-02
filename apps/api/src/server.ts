@@ -6,6 +6,7 @@ import { registerJobRoutes } from './routes/jobs';
 import { registerProjectRoutes } from './routes/projects';
 import { registerConversationRoutes } from './routes/conversations';
 import { registerEditorialRoutes } from './routes/editorial';
+import { registerPublishingRoutes } from './routes/publishing';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -27,7 +28,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 4 — génération éditoriale',
+    step: 'étape 5 — revue et validation humaines',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -66,12 +67,17 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /angles/:angleId/reject',
       'GET /projects/:id/content',
       'POST /projects/:id/content',
+      'GET /editorial/vocabulary',
       'POST /content/:contentId/regenerate',
       'GET /content/:contentId',
       'POST /content/:contentId/review',
       'PATCH /content/:contentId',
       'POST /content/:contentId/approve',
       'POST /content/:contentId/reject',
+      'GET /projects/:id/platform-accounts',
+      'POST /projects/:id/platform-accounts',
+      'POST /content/:contentId/manual-package',
+      'POST /manual-packages/:packageId/published',
     ],
   }));
 
@@ -80,6 +86,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerProjectRoutes(app, context);
   registerConversationRoutes(app, context);
   registerEditorialRoutes(app, context);
+  registerPublishingRoutes(app, context);
 
   return app;
 }

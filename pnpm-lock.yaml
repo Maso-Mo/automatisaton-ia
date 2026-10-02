@@ -34,6 +34,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@playwright/test':
+        specifier: ^1.63.0
+        version: 1.63.0
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
@@ -88,6 +91,9 @@ importers:
       '@aia/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@aia/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@aia/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -100,6 +106,9 @@ importers:
       fastify:
         specifier: ^5.12.3
         version: 5.12.3
+      zod:
+        specifier: ^4.6.2
+        version: 4.6.2
 
   apps/web:
     dependencies:
@@ -248,7 +257,11 @@ importers:
         specifier: ^13.1.3
         version: 13.1.3
 
-  packages/publishing: {}
+  packages/publishing:
+    dependencies:
+      '@aia/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/queue:
     dependencies:
@@ -1292,6 +1305,14 @@ packages:
       {
         integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==,
       }
+
+  '@playwright/test@1.63.0':
+    resolution:
+      {
+        integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
 
   '@rolldown/pluginutils@1.0.0-rc.3':
     resolution:
@@ -3074,6 +3095,22 @@ packages:
       }
     hasBin: true
 
+  playwright-core@1.63.0:
+    resolution:
+      {
+        integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution:
+      {
+        integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
   postcss@8.5.28:
     resolution:
       {
@@ -4097,6 +4134,10 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
+  '@playwright/test@1.63.0':
+    dependencies:
+      playwright: 1.63.0
+
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
@@ -5096,6 +5137,12 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.2.0
+
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
 
   postcss@8.5.28:
     dependencies:

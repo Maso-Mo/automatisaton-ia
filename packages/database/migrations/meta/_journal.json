@@ -29,6 +29,13 @@
       "when": 1789377628006,
       "tag": "0003_robust_ultron",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790956800000,
+      "tag": "0004_step_five_manual_publishing",
+      "breakpoints": true
     }
   ]
 }

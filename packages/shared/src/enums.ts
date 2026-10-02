@@ -237,6 +237,109 @@ export const MASTER_BRIEF_STATUS_LABELS: Record<MasterBriefStatus, string> = {
   superseded: 'Remplacée',
 };
 
+/**
+ * Libellés de la **revue par plateforme** (étape 5).
+ *
+ * L'écran de revue affiche trois choses à la fois : un état, un numéro de version
+ * et l'origine de cette version. Aucune de ces trois valeurs n'est traduite dans
+ * l'interface : elles sont servies par `GET /editorial/vocabulary`, comme le
+ * vocabulaire des projets — une valeur ajoutée au domaine sans libellé est une
+ * erreur de compilation ici, pas un écran vide chez l'utilisateur.
+ */
+export const CONTENT_STATE_LABELS: Record<ContentState, string> = {
+  draft: 'Brouillon',
+  generated: 'Généré',
+  in_review: 'En relecture',
+  editing: 'En modification',
+  approved: 'Approuvé',
+  scheduled: 'Programmé',
+  publishing: 'Publication en cours',
+  published: 'Publié',
+  publish_failed: 'Publication échouée',
+  publish_ambiguous: 'Publication incertaine',
+  // Le produit n'a pas d'état `rejected` : un rejet est un archivage accompagné
+  // d'une décision (`rejectContent`). Le libellé le dit sans mentir sur la donnée.
+  archived: 'Archivé',
+};
+
+/** Origine de la version courante : « v3 » ne dit pas la même chose que « v3, réécrite par l'IA ». */
+export const CONTENT_GENERATION_LABELS: Record<ContentGeneration, string> = {
+  initial: 'Génération initiale',
+  regenerated: 'Régénération IA',
+  edited: 'Modification manuelle',
+  reformatted: 'Reformatage',
+};
+
+export const CONTENT_NOTE_TYPE_LABELS: Record<ContentNoteType, string> = {
+  critique: 'Critique',
+  suggestion: 'Suggestion',
+  erreur: 'Erreur',
+  warning: 'Avertissement',
+  decision: 'Décision',
+};
+
+export const CONTENT_NOTE_SEVERITY_LABELS: Record<ContentNoteSeverity, string> = {
+  info: 'Information',
+  basse: 'Basse',
+  moyenne: 'Moyenne',
+  haute: 'Haute',
+};
+
+export const PLATFORM_LABELS: Record<PlatformId, string> = {
+  linkedin: 'LinkedIn',
+  reddit: 'Reddit',
+  x: 'X',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+  blog: 'Blog',
+};
+
+/**
+ * L'en-tête de **section** de l'écran de revue : « YouTube » porte deux cibles
+ * (Short et vidéo longue), donc deux sections distinctes. Le libellé de la cible
+ * (`contentTargetSpec(target).label`) reste celui de la ligne de suivi.
+ */
+export const CONTENT_TARGET_SECTION_LABELS: Record<ContentTarget, string> = {
+  linkedin_post: 'LinkedIn',
+  reddit_post: 'Reddit',
+  tiktok_short: 'TikTok',
+  youtube_short: 'YouTube Short',
+  youtube_long: 'YouTube long',
+};
+
+/**
+ * État d'un **sujet** (docs/03 §8.2) : proposé, choisi, en production, produit,
+ * archivé. L'écran du plan éditorial affiche ces libellés ; il ne traduit jamais
+ * le code brut lui-même, sinon un état ajouté au domaine passerait inaperçu.
+ */
+export const SUBJECT_STATUS_LABELS: Record<SubjectStatus, string> = {
+  proposed: 'Proposé',
+  selected: 'Choisi',
+  in_production: 'En production',
+  produced: 'Produit',
+  archived: 'Archivé',
+};
+
+/** Ce que le sujet demande, comparé aux compétences du projet (docs/03 §8.2). */
+export const SKILL_COVERAGE_LABELS: Record<SkillCoverage, string> = {
+  couverte: 'Compétence couverte',
+  partielle: 'Compétence partielle',
+  non_couverte: 'Compétence à découvrir',
+};
+
+/** Le type d'angle est ce que l'utilisateur choisit vraiment : « tutoriel », pas « angle 2 ». */
+export const ANGLE_TYPE_LABELS: Record<AngleType, string> = {
+  retour_experience: 'Retour d’expérience',
+  tutoriel: 'Tutoriel',
+  opinion: 'Opinion',
+  comparaison: 'Comparaison',
+  erreur: 'Erreur à éviter',
+  coulisses: 'Coulisses',
+  question: 'Question',
+  etude_de_cas: 'Étude de cas',
+};
+
 export const SKILL_LEVELS = ['debutant', 'intermediaire', 'avance', 'expert'] as const;
 export type SkillLevel = (typeof SKILL_LEVELS)[number];
 export const skillLevelSchema = z.enum(SKILL_LEVELS);
@@ -471,6 +574,25 @@ export const CONTENT_GENERATIONS = ['initial', 'regenerated', 'edited', 'reforma
 export type ContentGeneration = (typeof CONTENT_GENERATIONS)[number];
 export const contentGenerationSchema = z.enum(CONTENT_GENERATIONS);
 
+/**
+ * Nature et gravité d'une remarque de revue (docs/03 §9.4). Elles vivent dans
+ * `shared` — et non dans `core` — parce que l'écran de revue les affiche : une
+ * remarque sans type lisible est une remarque que personne ne lit.
+ */
+export const CONTENT_NOTE_TYPES = [
+  'critique',
+  'suggestion',
+  'erreur',
+  'warning',
+  'decision',
+] as const;
+export type ContentNoteType = (typeof CONTENT_NOTE_TYPES)[number];
+export const contentNoteTypeSchema = z.enum(CONTENT_NOTE_TYPES);
+
+export const CONTENT_NOTE_SEVERITIES = ['info', 'basse', 'moyenne', 'haute'] as const;
+export type ContentNoteSeverity = (typeof CONTENT_NOTE_SEVERITIES)[number];
+export const contentNoteSeveritySchema = z.enum(CONTENT_NOTE_SEVERITIES);
+
 // --- Configuration ---------------------------------------------------------
 
 export const SETTING_VALUE_TYPES = ['string', 'number', 'boolean', 'json'] as const;
@@ -575,4 +697,6 @@ export const ENUM_REGISTRY = {
   CONTENT_TARGETS: { values: CONTENT_TARGETS, schema: contentTargetSchema },
   CONTENT_STATES: { values: CONTENT_STATES, schema: contentStateSchema },
   CONTENT_GENERATIONS: { values: CONTENT_GENERATIONS, schema: contentGenerationSchema },
+  CONTENT_NOTE_TYPES: { values: CONTENT_NOTE_TYPES, schema: contentNoteTypeSchema },
+  CONTENT_NOTE_SEVERITIES: { values: CONTENT_NOTE_SEVERITIES, schema: contentNoteSeveritySchema },
 } as const;

@@ -32,7 +32,7 @@ Conséquences — ce que cela coûte, ce que cela interdit, ce qu'il faudra assu
 | État | Où elle vit | Combien de temps elle est valable |
 |---|---|---|
 | **Prise** (verrouillée) | §2 de ce document, + le document qui la détaille | Jusqu'à ce qu'une décision de remplacement explicite la remplace |
-| **Ouverte** | §3 (D1 à D6) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
+| **Ouverte** | §3 (D2 à D6 ; D1 reste visible mais est tranchée) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
 | **Refusée** | §6 (« ce qui doit attendre ») | Jusqu'à sa condition de réexamen, écrite noir sur blanc |
 
 **Une décision n'est jamais supprimée.** Une décision remplacée reste visible avec la mention
@@ -121,7 +121,7 @@ Source : [`06-connecteurs-et-publication.md`](06-connecteurs-et-publication.md) 
 | **Un contrat unique `PlatformConnector` ; aucun nom de plateforme dans `packages/core`** | Le domaine ne doit pas être modifié quand une plateforme change d'API | Un `if (platform === 'linkedin')` dans le pipeline · un service par plateforme | Une indirection de plus, et l'obligation de tout passer par `capabilities_json` |
 | **Trois niveaux de publication (A automatisé, B brouillon distant, C paquet manuel)** | Toutes les plateformes ne permettent pas l'automatisation, et leurs CGU changent | Automatiser partout · publier à la main partout | Trois chemins à tester et à expliquer dans l'interface |
 | **Le niveau C est implémenté pour *toutes* les plateformes, sans exception** | C'est le niveau qui garantit que le workflow n'est jamais bloqué | Ne faire le niveau C que là où l'API manque | Un écran de plus à maintenir — c'est le filet de sécurité permanent |
-| **Niveau retenu en V1 : LinkedIn A, YouTube B, Reddit C, TikTok C** | Aligner l'ambition sur ce que les API autorisent réellement à un particulier | X automatique · TikTok automatisé · Instagram automatisé | Décision **D1** à confirmer à l'étape 5 ; les CGU de chaque plateforme sont marquées ⚠️ à revérifier |
+| **Niveau retenu en V1 : LinkedIn, Reddit, TikTok et YouTube au niveau C** | Livrer la boucle utile sans dépendre d'une autorisation d'API ; le contrat commun garde les niveaux A/B possibles plus tard | X · toute publication automatique à l'étape 5 | Décision **D1 tranchée** à l'étape 5 ; limites vérifiées et incertaines conservées en avertissement |
 | **Validation du contenu *avant* envoi, depuis `capabilities_json`** | Une publication refusée après envoi laisse un état ambigu et un contenu tronqué | Valider après le refus · faire confiance à l'API | Les règles de format doivent être tenues à jour dans chaque connecteur |
 | **`ambiguous` = décision humaine, jamais de rejeu automatique** | Une réponse perdue ne prouve pas que la publication a échoué | Réessayer · considérer l'échec comme acquis | Un contenu peut rester « à vérifier » tant que l'utilisateur n'a pas regardé la plateforme |
 | **Une limite de débit reporte une publication, elle ne la fait jamais échouer** | Être banni pour avoir insisté n'est pas acceptable | Réessayer immédiatement · contourner la limite | Le calendrier peut glisser après plusieurs reports |
@@ -188,15 +188,15 @@ Source : [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-e
 
 ---
 
-## 3. Les décisions ouvertes (D1 à D6)
+## 3. Les décisions D1 à D6 (D1 tranchée, D2 à D6 ouvertes)
 
-Ces six décisions viennent de [`02-architecture.md`](02-architecture.md) §15. Elles sont **assumées
-comme ouvertes** : les trancher maintenant serait décider sans information. Chacune indique l'étape
-qui la requiert et le **critère** qui permettra de choisir.
+Ces six décisions viennent de [`02-architecture.md`](02-architecture.md) §15. D1 a été tranchée à
+l'étape 5 ; les cinq autres restent ouvertes jusqu'à disposer de leur mesure. Chacune indique
+l'étape qui la requiert et le **critère** qui permettra de choisir.
 
 | # | Décision | Étape | Option A | Option B | Ce qui tranchera |
 |---|---|---|---|---|---|
-| D1 | Nombre de plateformes en V1 | 5 | 1 (LinkedIn) | 2 (LinkedIn + Reddit) / 3 (+ X) | Le temps de mise en place des connecteurs, mesuré à l'étape 5 |
+| D1 | Nombre de plateformes en V1 | 5 | **Tranchée : 4 en niveau C** | LinkedIn + Reddit + TikTok + YouTube | Le connecteur manuel commun a rendu les quatre conformes sans quatre API |
 | D2 | Modèle de transcription par défaut | 3 | `small` (rapide, moins précis) | `medium` (plus lent, plus juste) | Le résultat sur 20 transcriptions réelles, chronométré |
 | D3 | Adaptation multi-plateformes | 6 | Réécriture LLM soumise à validation | L'utilisateur réécrit lui-même | La qualité observée à l'étape 4 sur des contenus réels |
 | D4 | Fréquence de collecte analytics | 8 | Quotidien | Toutes les 6 h | Les quotas réels de l'API et l'utilité d'une fraîcheur de 6 h |
@@ -211,9 +211,9 @@ qui la requiert et le **critère** qui permettra de choisir.
 | **Option A — 1 plateforme (LinkedIn)** | Le plus rapide à finir. Conséquence assumée : le produit ne démontre pas la promesse « un contenu, plusieurs plateformes », qui est l'une de ses raisons d'être |
 | **Option B — 2 plateformes (LinkedIn + Reddit)** | Compromis : une plateforme à API et une plateforme à paquet manuel, donc les deux chemins sont exercés. Conséquence : l'étape 5 s'allonge |
 | **Option C — 3 plateformes (+ X)** | La plus démonstrative sur l'adaptation. Conséquence : trois jeux de contraintes à valider, et X est la plateforme la plus volatile en termes de conditions d'accès ⚠️ |
-| **Décision** | **Ouverte** |
+| **Décision** | **Quatre plateformes : LinkedIn, Reddit, TikTok et YouTube, toutes au niveau C.** X est écarté de la V1. |
 | **Critère** | Le connecteur LinkedIn est terminé et testé **avant** d'ouvrir Reddit. Si l'étape 5 dépasse son estimation, on reste à 2 plateformes et le niveau C est déjà implémenté pour les autres |
-| **À consigner dans** | Ce document, §2 (la décision y est ajoutée le jour où elle est tranchée), au moment où le connecteur LinkedIn passe ses tests de conformité |
+| **À consigner dans** | Décision consignée à l'étape 5 ; détails et preuves dans `15-mise-en-oeuvre-etape-5.md` §5 |
 
 ### 3.2 D2 — Transcription locale : `small` par défaut ou `medium` ?
 
@@ -420,8 +420,8 @@ fonctionnalité qu'on ajoutera au mauvais moment.
 
 | Élément | Nombre | Où | Rythme de mise à jour |
 |---|---|---|---|
-| Décisions prises et verrouillées | 67 | §2 | À chaque décision nouvelle, jamais en lot |
-| Décisions ouvertes, avec critère et étape | 6 | §3 (D1–D6) | Tranchées une par une, juste avant l'étape concernée |
+| Décisions prises et verrouillées | 68 | §2 | À chaque décision nouvelle, jamais en lot |
+| Décisions ouvertes, avec critère et étape | 5 | §3 (D2–D6) | Tranchées une par une, juste avant l'étape concernée |
 | Risques majeurs identifiés | 26 | §4 | Revus à chaque jalon (J1 à J4) |
 | Limites assumées, avec condition de réexamen | 17 | §5 | Réexaminées seulement si la condition écrite se présente |
 | Fonctionnalités volontairement reportées | 17 | §6 | Une ligne ne sort que par une décision ajoutée au §2 |
@@ -454,19 +454,19 @@ venir : un risque à impact 3 dont le signal est facile à rater.
 | **Hallucination factuelle validée** | Un fait erroné publié, ou un `risk='eleve'` approuvé sans vérification | Revue de la porte de sortie (le déclencheur en base), et non du prompt : c'est la porte qui a manqué |
 | **Dérive du budget d'appels LLM** | Deux semaines consécutives au plafond, ou un écart de plus de 20 % avec l'estimation | Passage en mode économie, revue de la taille des contextes envoyés, puis choix mesuré du modèle par agent |
 
-### 7.4 Les six décisions ouvertes et leur échéance
+### 7.4 D1 tranchée et les cinq décisions encore ouvertes
 
 | # | Décision | Échéance | Critère (rappel) |
 |---|---|---|---|
-| D1 | Nombre de plateformes de la V1 | Étape 5 | Le temps réel de mise en place du premier connecteur |
+| D1 | Nombre de plateformes de la V1 | **Tranchée à l'étape 5** | 4 plateformes, niveau C commun |
 | D2 | Modèle de transcription par défaut | Étape 3 | 20 transcriptions réelles, chronométrées et corrigées |
 | D3 | Adaptation multi-plateformes assistée ou manuelle | Étape 6 (mesurée à l'étape 4) | Comparaison côte à côte avec un contenu écrit à la main |
 | D4 | Fréquence de collecte des statistiques | Étape 8 | Les quotas réels observés sur les API déployées |
 | D5 | Sauvegarde : un bloc ou deux | Étape 10 | Le volume accumulé après une semaine d'usage réel |
 | D6 | Mode démonstration | Étape 11 | Le temps restant et un besoin de démonstration réel (défaut : non) |
 
-**Aucune de ces six décisions ne doit être tranchée aujourd'hui.** Les trancher sans la mesure
-reviendrait à choisir au hasard, puis à défendre le hasard.
+**D2 à D6 ne doivent pas être tranchées sans leur mesure.** Ce serait choisir au hasard, puis
+défendre le hasard.
 
 ### 7.5 Trois questions directes
 
@@ -477,9 +477,9 @@ de code, et se paient sinon par une réécriture. Ce document ne remplace pas le
 le réécrire.
 
 **« Qu'est-ce qui reste vraiment incertain ? »**
-Six décisions (D1–D6) et une dépendance externe entière : l'accès aux API des plateformes. Le reste
-est soit tranché, soit explicitement refusé. C'est volontaire : l'inconnu doit être **nommé**, pas
-dissous dans une formulation prudente.
+Cinq décisions (D2–D6) et une dépendance externe entière : l'accès aux API des plateformes. Le
+reste est soit tranché, soit explicitement refusé. C'est volontaire : l'inconnu doit être **nommé**,
+pas dissous dans une formulation prudente.
 
 **« Quel est le seul risque qui peut tuer le projet ? »**
 Pas la technique. C'est « le projet ne dépasse jamais la V1 » (§4.4) : une suite de jobs qui tourne,
@@ -511,8 +511,6 @@ existe, et qu'il peut arrêter le projet.
 [`09-tests-et-qualite.md`](09-tests-et-qualite.md) ·
 [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-etapes.md) ·
 [`README.md`](README.md)
-
-
 
 
 

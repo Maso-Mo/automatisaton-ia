@@ -158,6 +158,7 @@ interface ContentPayload {
     regeneratedCount: number;
   };
   version: {
+    id: string;
     versionNumber: number;
     body: string;
     hook: string | null;
@@ -255,11 +256,55 @@ describe('API éditoriale et génération de contenus (docs/10 §4.3, docs/05 §
       step: string;
       endpoints: string[];
     };
-    expect(body.step).toContain('étape 4');
+    expect(body.step).toContain('étape 5');
     expect(body.endpoints).toContain('POST /projects/:id/plan');
     expect(body.endpoints).toContain('POST /projects/:id/content');
     expect(body.endpoints).toContain('POST /content/:contentId/regenerate');
     expect(body.endpoints).toContain('POST /content/:contentId/approve');
+  });
+
+  it('sert le vocabulaire de l’écran : cibles, états, libellés de sujets et d’angles', async () => {
+    const context = createTestContext();
+    openContext = context;
+    const app = buildServer(
+      buildApi({ config: context.config, logger: context.logger, clock: context.clock }),
+    );
+
+    const response = await app.inject({ method: 'GET', url: '/editorial/vocabulary' });
+    expect(response.statusCode).toBe(200);
+    const vocabulary = response.json() as {
+      targets: Array<{ key: string; label: string; bodyMaxChars: number }>;
+      contentStates: Array<{ value: string; label: string; next: string[] }>;
+      subjectStatuses: Array<{ value: string; label: string }>;
+      skillCoverages: Array<{ value: string; label: string }>;
+      angleTypes: Array<{ value: string; label: string }>;
+      limits: { maxRegenerationsPerItem: number };
+    };
+
+    // Les cinq cibles de l'étape 5, avec leurs bornes : l'écran n'a aucune table à recopier.
+    expect(vocabulary.targets.map((target) => target.key).sort()).toEqual([
+      'linkedin_post',
+      'reddit_post',
+      'tiktok_short',
+      'youtube_long',
+      'youtube_short',
+    ]);
+    expect(vocabulary.targets.every((target) => target.bodyMaxChars > 0)).toBe(true);
+    // L'écran de revue explique un refus à partir des transitions servies.
+    const generated = vocabulary.contentStates.find((state) => state.value === 'generated');
+    expect(generated?.next).toContain('in_review');
+    expect(vocabulary.limits.maxRegenerationsPerItem).toBeGreaterThan(0);
+    // Le plan éditorial affiche l'état d'un sujet et le type d'un angle par leur libellé.
+    expect(vocabulary.subjectStatuses.map((status) => status.value)).toContain('proposed');
+    expect(vocabulary.skillCoverages.map((coverage) => coverage.value)).toContain('couverte');
+    expect(vocabulary.angleTypes.map((angleType) => angleType.value)).toContain('tutoriel');
+    for (const list of [
+      vocabulary.subjectStatuses,
+      vocabulary.skillCoverages,
+      vocabulary.angleTypes,
+    ]) {
+      for (const entry of list) expect(entry.label.trim().length).toBeGreaterThan(0);
+    }
   });
 
   it('refuse de planifier tant que la fiche maître n’est pas validée', async () => {
@@ -460,5 +505,142 @@ describe('API éditoriale et génération de contenus (docs/10 §4.3, docs/05 §
     const decision = body.content.notes.find((note) => note.noteType === 'decision');
     expect(decision?.message).toContain('Trop générique');
     expect(decision?.author).toBe('user');
+  });
+
+  it('bloque un claim critique puis conserve la version et le texte exacts publiés manuellement', async () => {
+    const b = await makeBench();
+    const angleId = await pickAngle(b);
+    const created = await b.app.inject({
+      method: 'POST',
+      url: `/projects/${b.projectId}/content`,
+      payload: { angleId, targets: ['linkedin_post'] },
+    });
+    const contentId = (created.json() as { content: ContentPayload[] }).content[0]!.item.id;
+    expect(await b.editorial.loop.runOnce()).toBe(1);
+    expect(
+      (await b.app.inject({ method: 'POST', url: `/content/${contentId}/review` })).statusCode,
+    ).toBe(200);
+
+    const reviewed = await readContent(b, contentId);
+    const versionId = reviewed.content.version!.id;
+    expect(reviewed.content.notes.map((note) => note.author)).toEqual(
+      expect.arrayContaining(['critic', 'fact_checker']),
+    );
+
+    b.editorial.ports.store.replaceClaims(versionId, [
+      {
+        claim: 'Le gain atteint 70 %.',
+        claimType: 'chiffre',
+        verifiability: 'verifiable',
+        evidence: null,
+        evidenceSource: 'none',
+        risk: 'eleve',
+        status: 'needs_user_confirmation',
+      },
+    ]);
+    const blocked = await b.app.inject({ method: 'POST', url: `/content/${contentId}/approve` });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().error.code).toBe('CLAIM_BLOCKS_APPROVAL');
+    const prematurePackage = await b.app.inject({
+      method: 'POST',
+      url: `/content/${contentId}/manual-package`,
+      payload: {},
+    });
+    expect(prematurePackage.statusCode).toBe(409);
+
+    const canary = 'plateforme-secret-canari';
+    const accountResponse = await b.app.inject({
+      method: 'POST',
+      url: `/projects/${b.projectId}/platform-accounts`,
+      payload: { platform: 'linkedin', accountLabel: 'LinkedIn personnel', accessToken: canary },
+    });
+    expect(accountResponse.statusCode).toBe(201);
+    expect(accountResponse.body).not.toContain(canary);
+    const account = accountResponse.json().account as { id: string };
+    const storedToken = b.context.handle.sqlite
+      .prepare('select access_token_encrypted as token from platform_accounts where id = ?')
+      .get(account.id) as { token: string };
+    expect(storedToken.token).toMatch(/^enc:v1:1:/);
+    expect(storedToken.token).not.toContain(canary);
+
+    expect(() =>
+      b.context.handle.sqlite
+        .prepare(
+          `insert into publications
+             (id, project_id, content_item_id, content_version_id, platform_account_id,
+              platform, status, idempotency_key, attempt_count, needs_human_decision,
+              created_at, updated_at)
+           values (?, ?, ?, ?, ?, 'linkedin', 'planned', ?, 0, 0, ?, ?)`,
+        )
+        .run(
+          'publication-before-approval',
+          b.projectId,
+          contentId,
+          versionId,
+          account.id,
+          'before-approval',
+          Date.now(),
+          Date.now(),
+        ),
+    ).toThrow(/publication_refusee/);
+
+    const fact = b.context.handle.sqlite
+      .prepare("select id from project_facts where verification_status = 'verified' limit 1")
+      .get() as { id: string };
+    b.editorial.ports.store.replaceClaims(versionId, [
+      {
+        claim: 'Douze factures ont été automatisées.',
+        claimType: 'experience',
+        verifiability: 'verifiable',
+        evidence: fact.id,
+        evidenceSource: 'project_fact',
+        risk: 'eleve',
+        status: 'supported',
+      },
+    ]);
+    const approved = await b.app.inject({ method: 'POST', url: `/content/${contentId}/approve` });
+    expect(approved.statusCode).toBe(200);
+
+    const packageResponse = await b.app.inject({
+      method: 'POST',
+      url: `/content/${contentId}/manual-package`,
+      payload: {},
+    });
+    expect(packageResponse.statusCode).toBe(201);
+    const manualPackage = packageResponse.json().manualPackage as {
+      id: string;
+      contentVersionId: string;
+      body: string;
+      copyBlocks: { body: string; hashtags: string };
+    };
+    expect(manualPackage.contentVersionId).toBe(versionId);
+    expect(manualPackage.copyBlocks.body).toBe(manualPackage.body);
+
+    const publicationResponse = await b.app.inject({
+      method: 'POST',
+      url: `/manual-packages/${manualPackage.id}/published`,
+      payload: { platformAccountId: account.id },
+    });
+    expect(publicationResponse.statusCode).toBe(200);
+    expect(publicationResponse.json().publication).toMatchObject({
+      status: 'published',
+      contentVersionId: versionId,
+      exactText: manualPackage.body,
+    });
+    const publication = b.context.handle.sqlite
+      .prepare(
+        'select content_version_id as versionId, published_at as publishedAt from publications',
+      )
+      .get() as { versionId: string; publishedAt: number };
+    expect(publication).toMatchObject({ versionId, publishedAt: expect.any(Number) });
+    const attempt = b.context.handle.sqlite
+      .prepare('select request_json as requestJson, outcome from publication_attempts')
+      .get() as { requestJson: string; outcome: string };
+    expect(attempt.outcome).toBe('success');
+    expect(JSON.parse(attempt.requestJson)).toMatchObject({
+      body: manualPackage.body,
+      contentVersionId: versionId,
+    });
+    expect((await readContent(b, contentId)).content.item.state).toBe('published');
   });
 });

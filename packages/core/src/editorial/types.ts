@@ -4,6 +4,8 @@ import type {
   AngleType,
   ContentFormat,
   ContentGeneration,
+  ContentNoteSeverity,
+  ContentNoteType,
   ContentState,
   ContentTarget,
   ContentTargetSpec,
@@ -142,13 +144,32 @@ export interface ContentReviewNote {
   contentVersionId: string | null;
   /** `user`, `platform_writer`… : une remarque a toujours un auteur nommé. */
   author: string;
-  noteType: 'critique' | 'suggestion' | 'erreur' | 'warning' | 'decision';
-  severity: 'info' | 'basse' | 'moyenne' | 'haute';
+  noteType: ContentNoteType;
+  severity: ContentNoteSeverity;
   message: string;
   anchorText: string | null;
   resolved: boolean;
   createdAt: number;
 }
+
+export interface ContentClaim {
+  id: string;
+  contentVersionId: string;
+  claim: string;
+  claimType: 'chiffre' | 'fait' | 'experience' | 'opinion' | 'prediction' | 'generalite';
+  verifiability: 'verifiable' | 'non_verifiable' | 'depend_du_contexte';
+  evidence: string | null;
+  evidenceSource: 'project_fact' | 'news_item' | 'user' | 'web' | 'none';
+  risk: 'faible' | 'moyen' | 'eleve';
+  status: 'supported' | 'unsupported' | 'needs_user_confirmation' | 'rejected';
+  userConfirmedAt: number | null;
+  createdAt: number;
+}
+
+export type NewContentClaimRecord = Omit<
+  ContentClaim,
+  'id' | 'contentVersionId' | 'userConfirmedAt' | 'createdAt'
+>;
 
 // --- Écritures ------------------------------------------------------------
 
@@ -220,6 +241,7 @@ export interface ContentItemPatch {
   editRatio?: number | null;
   regeneratedCount?: number;
   approvedAt?: number | null;
+  publishedAt?: number | null;
   archivedAt?: number | null;
 }
 
@@ -265,6 +287,10 @@ export interface EditorialStore {
   getVersion(id: string): ContentVersion | null;
   listVersions(contentItemId: string): ContentVersion[];
   approveVersion(versionId: string, approvedBy: string | null): ContentVersion;
+  updateVersionQuality(versionId: string, qualityScore: number): ContentVersion;
+
+  replaceClaims(contentVersionId: string, claims: readonly NewContentClaimRecord[]): void;
+  listClaims(contentVersionId: string): ContentClaim[];
 
   replaceNotes(
     contentItemId: string,
@@ -292,6 +318,7 @@ export interface ContentBundle {
   item: ContentItem;
   version: ContentVersion | null;
   notes: ContentReviewNote[];
+  claims: ContentClaim[];
 }
 
 /** Ce dont le domaine a besoin pour écrire : le projet, sa fiche, ses faits, ses compétences. */

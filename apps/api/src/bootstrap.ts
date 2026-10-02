@@ -4,6 +4,7 @@ import {
   createConversationStore,
   createEditorialStore,
   createProjectMemoryStore,
+  createPublishingStore,
   getJob,
   isWalEnabled,
   lastCompletedJob,
@@ -72,6 +73,7 @@ export interface ApiContext {
   conversationFeature: ConversationFeatureDeps;
   /** Orchestration éditoriale : plan (synchrone) et mise en file des rédactions. */
   editorial: EditorialFeatureDeps;
+  publishing: ReturnType<typeof createPublishingStore>;
   health(): SystemHealth;
   jobs(filter?: { statuses?: JobRow['status'][]; limit?: number }): JobRow[];
   job(id: string): JobRow | undefined;
@@ -287,6 +289,7 @@ export function buildApi(
     queue: producerQueue,
     logger,
   };
+  const publishing = createPublishingStore(handle, () => clock.nowMs());
 
   return {
     config,
@@ -299,6 +302,7 @@ export function buildApi(
     conversation,
     conversationFeature,
     editorial,
+    publishing,
     health: () => getSystemHealth(ports),
     jobs: (filter = {}) => listJobs(handle, filter),
     job: (id) => getJob(handle, id),

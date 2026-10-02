@@ -119,7 +119,12 @@ function itemOrThrow(ports: EditorialPorts, itemId: string): ContentItem {
 export function contentBundle(ports: EditorialPorts, itemId: string): ContentBundle {
   const item = itemOrThrow(ports, itemId);
   const version = item.currentVersionId ? ports.store.getVersion(item.currentVersionId) : null;
-  return { item, version, notes: ports.store.listNotes(itemId) };
+  return {
+    item,
+    version,
+    notes: ports.store.listNotes(itemId),
+    claims: version ? ports.store.listClaims(version.id) : [],
+  };
 }
 
 export function listProjectContent(
@@ -131,6 +136,7 @@ export function listProjectContent(
     item,
     version: item.currentVersionId ? ports.store.getVersion(item.currentVersionId) : null,
     notes: ports.store.listNotes(item.id),
+    claims: item.currentVersionId ? ports.store.listClaims(item.currentVersionId) : [],
   }));
 }
 
@@ -695,6 +701,30 @@ export function approveContent(
     throw new ConflictError(
       'Ce contenu n’a aucune version : il n’y a rien à approuver (générer avant d’approuver).',
       { code: 'CONTENT_NO_VERSION', details: { itemId } },
+    );
+  }
+
+  const currentNotes = ports.store
+    .listNotes(item.id)
+    .filter((note) => note.contentVersionId === item.currentVersionId);
+  for (const author of ['critic', 'fact_checker']) {
+    if (!currentNotes.some((note) => note.author === author)) {
+      throw new ConflictError(
+        `Approbation impossible : le contrôle « ${author} » n’a pas été exécuté sur cette version.`,
+        {
+          code: 'CONTENT_REVIEW_REQUIRED',
+          details: { itemId, versionId: item.currentVersionId, author },
+        },
+      );
+    }
+  }
+  const blockingClaim = ports.store
+    .listClaims(item.currentVersionId)
+    .find((claim) => claim.risk === 'eleve' && claim.status !== 'supported');
+  if (blockingClaim) {
+    throw new ConflictError(
+      `Approbation impossible : l’affirmation critique « ${blockingClaim.claim} » n’est pas étayée.`,
+      { code: 'CLAIM_BLOCKS_APPROVAL', details: { claimId: blockingClaim.id } },
     );
   }
 

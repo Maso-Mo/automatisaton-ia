@@ -324,6 +324,239 @@ function queryString(params: Record<string, string | number | boolean | undefine
   return rendered.length > 0 ? `?${rendered}` : '';
 }
 
+// --- Revue éditoriale (étape 5) -------------------------------------------
+//
+// Ces vues décrivent **ce que l'API rend**, pas le domaine : `apps/web` n'importe
+// aucun paquet du domaine. Les chaînes (`state`, `generation`, `target`…) sont
+// volontairement laissées en `string` : l'écran les affiche via les libellés reçus
+// du vocabulaire, jamais par une table recopiée ici.
+
+/** Une cible de génération et ses limites de forme (docs/06 §5, §7). */
+export interface EditorialTargetSpec {
+  key: string;
+  label: string;
+  /** En-tête de section de l'écran : « YouTube Short » et « YouTube long » sont deux sections. */
+  sectionLabel: string;
+  platform: string;
+  format: string;
+  bodyMaxChars: number;
+  bodyTargetChars: number;
+  titleMaxChars: number;
+  hookMaxChars: number;
+  hashtagsMin: number;
+  hashtagsMax: number;
+  segmentsRequired: boolean;
+  shape: string;
+  promptFile: string;
+}
+
+export interface EditorialVocabulary {
+  targets: EditorialTargetSpec[];
+  /** `next` est la liste des états autorisés : l'écran explique un refus avant l'appel. */
+  contentStates: Array<{ value: string; label: string; next: string[] }>;
+  generations: Array<{ value: string; label: string }>;
+  noteTypes: Array<{ value: string; label: string }>;
+  noteSeverities: Array<{ value: string; label: string }>;
+  /**
+   * Libellés des sujets et des angles : le plan éditorial les affiche tels quels,
+   * sans traduire un code du domaine côté écran.
+   */
+  subjectStatuses: Array<{ value: string; label: string }>;
+  skillCoverages: Array<{ value: string; label: string }>;
+  angleTypes: Array<{ value: string; label: string }>;
+  limits: { maxRegenerationsPerItem: number };
+}
+
+export interface AngleView {
+  id: string;
+  subjectId: string;
+  platform: string;
+  hook: string;
+  angleType: string;
+  structure: string[];
+  evidence: string[];
+  rationale: string | null;
+  score: number | null;
+  selected: boolean;
+  rejectionReason: string | null;
+  createdAt: number;
+}
+
+export interface SubjectView {
+  id: string;
+  projectId: string;
+  masterBriefId: string | null;
+  conversationId: string | null;
+  title: string;
+  thesis: string;
+  pillar: string | null;
+  origin: string;
+  status: string;
+  skillCoverage: string | null;
+  evidence: string[];
+  priorityScore: number | null;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+}
+
+export interface SubjectWithAngles {
+  subject: SubjectView;
+  angles: AngleView[];
+}
+
+export interface EditorialPlanResponse {
+  subjects: SubjectView[];
+  angles: AngleView[];
+  accepted: number;
+  rejected: Array<{ title?: string; reason: string }>;
+  droppedAngles: Array<{ hook?: string; reason: string }>;
+  usage: { inputTokens: number; outputTokens: number; costMicroUsd: number; model: string };
+  repaired: boolean;
+}
+
+export interface ContentNoteView {
+  id: string;
+  contentItemId: string;
+  contentVersionId: string | null;
+  author: string;
+  noteType: string;
+  severity: string;
+  message: string;
+  anchorText: string | null;
+  resolved: boolean;
+  createdAt: number;
+}
+
+export interface ContentClaimView {
+  id: string;
+  contentVersionId: string;
+  claim: string;
+  claimType: string;
+  verifiability: string;
+  evidence: string | null;
+  evidenceSource: string;
+  risk: string;
+  status: string;
+  userConfirmedAt: number | null;
+  createdAt: number;
+}
+
+export interface ContentVersionView {
+  id: string;
+  contentItemId: string;
+  versionNumber: number;
+  body: string;
+  title: string | null;
+  hook: string | null;
+  hashtags: string[];
+  mentions: string[];
+  linkUrl: string | null;
+  charCount: number | null;
+  wordCount: number | null;
+  readingTimeSec: number | null;
+  generation: string;
+  modelUsed: string | null;
+  qualityScore: number | null;
+  approvedAt: number | null;
+  approvedBy: string | null;
+  createdAt: number;
+}
+
+export interface ContentItemView {
+  id: string;
+  projectId: string;
+  subjectId: string | null;
+  angleId: string | null;
+  platform: string;
+  target: string;
+  format: string;
+  title: string | null;
+  state: string;
+  currentVersionId: string | null;
+  approvedVersionId: string | null;
+  contentHash: string | null;
+  aiGenerated: boolean;
+  humanEdited: boolean;
+  /** Part du texte changée à la main (0..1) : `null` tant qu'aucune édition n'a eu lieu. */
+  editRatio: number | null;
+  regeneratedCount: number;
+  createdAt: number;
+  updatedAt: number;
+  approvedAt: number | null;
+  scheduledFor: number | null;
+  publishedAt: number | null;
+  archivedAt: number | null;
+}
+
+export interface ContentBundleView {
+  item: ContentItemView;
+  version: ContentVersionView | null;
+  notes: ContentNoteView[];
+  claims: ContentClaimView[];
+}
+
+export interface PlatformAccountView {
+  id: string;
+  projectId: string;
+  platform: string;
+  accountLabel: string;
+  remoteAccountId: string | null;
+  connectionState: string;
+  capabilities: unknown;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ManualPackageView {
+  id: string;
+  contentItemId: string;
+  contentVersionId: string;
+  platform: string;
+  body: string;
+  title: string | null;
+  copyBlocks: Record<string, unknown>;
+  assetPaths: string[];
+  instructions: string | null;
+  deepLink: string | null;
+  markedPublishedAt: number | null;
+  createdAt: number;
+}
+
+export interface ContentHistoryView {
+  item: ContentItemView;
+  versions: ContentVersionView[];
+  currentVersionId: string | null;
+  approvedVersionId: string | null;
+}
+
+export interface DraftIssueView {
+  code: string;
+  severity: 'blocking' | 'warning';
+  field: string;
+  message: string;
+}
+
+export interface DraftValidationView {
+  target: string;
+  ok: boolean;
+  blocking: DraftIssueView[];
+  warnings: DraftIssueView[];
+  stats: {
+    charCount: number;
+    wordCount: number;
+    readingTimeSec: number;
+    hashtags: number;
+    chapters: number;
+  };
+}
+
+export interface ContentDetailView {
+  content: ContentBundleView;
+  history: ContentHistoryView;
+  validation: DraftValidationView | null;
+}
+
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
@@ -438,6 +671,109 @@ export const api = {
     postJson<{ brief: MasterBriefView }>(`/briefs/${encodeURIComponent(briefId)}/validation`, {}),
   projectBrief: (projectId: string) =>
     getJson<{ brief: MasterBriefView | null }>(`/projects/${encodeURIComponent(projectId)}/brief`),
+
+  // --- Revue éditoriale (étape 5) ----------------------------------------
+  /**
+   * Le vocabulaire de l'écran de revue est **servi par l'API** : cibles et leurs
+   * limites, états et transitions autorisées, libellés de version et de remarque,
+   * plafond de régénérations. L'interface ne recopie donc jamais une valeur du
+   * domaine, et un texte refusé par le serveur peut toujours être expliqué avant
+   * l'appel (`canApprove`, `approvalBlockedReason` dans `features/editorial/state`).
+   */
+  editorialVocabulary: () => getJson<EditorialVocabulary>('/editorial/vocabulary'),
+  editorialPlan: (projectId: string) =>
+    postJson<EditorialPlanResponse>(`/projects/${encodeURIComponent(projectId)}/plan`, {}),
+  projectSubjects: (projectId: string, params: { status?: string; limit?: number } = {}) =>
+    getJson<{ subjects: SubjectWithAngles[] }>(
+      `/projects/${encodeURIComponent(projectId)}/subjects${queryString(params)}`,
+    ),
+  selectAngle: (angleId: string, note?: string) =>
+    postJson<{ angle: AngleView; subject: SubjectView; angles: AngleView[] }>(
+      `/angles/${encodeURIComponent(angleId)}/select`,
+      note ? { note } : {},
+    ),
+  rejectAngle: (angleId: string, reason: string) =>
+    postJson<{ angle: AngleView; angles: AngleView[] }>(
+      `/angles/${encodeURIComponent(angleId)}/reject`,
+      { reason },
+    ),
+  projectContent: (projectId: string, params: { state?: string; limit?: number } = {}) =>
+    getJson<{ content: ContentBundleView[]; targets: string[] }>(
+      `/projects/${encodeURIComponent(projectId)}/content${queryString(params)}`,
+    ),
+  generateContent: (projectId: string, body: { angleId: string; targets: string[] }) =>
+    postJson<{ content: ContentBundleView[]; jobId: string }>(
+      `/projects/${encodeURIComponent(projectId)}/content`,
+      body,
+    ),
+  /** Régénérer **un** contenu : la cible est celle du contenu, jamais celle du corps. */
+  regenerateContent: (contentId: string, instruction?: string) =>
+    postJson<{ content: ContentBundleView; jobId: string }>(
+      `/content/${encodeURIComponent(contentId)}/regenerate`,
+      instruction ? { instruction } : {},
+    ),
+  contentDetail: (contentId: string) =>
+    getJson<ContentDetailView>(`/content/${encodeURIComponent(contentId)}`),
+  /** Ouvrir la relecture : c'est cet appel qui autorise l'approbation ensuite. */
+  markContentInReview: (contentId: string) =>
+    postJson<{ content: ContentBundleView }>(
+      `/content/${encodeURIComponent(contentId)}/review`,
+      {},
+    ),
+  editContent: (
+    contentId: string,
+    body: {
+      body: string;
+      title?: string | null;
+      hook?: string | null;
+      hashtags?: string[];
+      mentions?: string[];
+      author?: string;
+    },
+  ) => patchJson<{ content: ContentBundleView }>(`/content/${encodeURIComponent(contentId)}`, body),
+  approveContent: (contentId: string, approvedBy?: string) =>
+    postJson<{ content: ContentBundleView }>(
+      `/content/${encodeURIComponent(contentId)}/approve`,
+      approvedBy ? { approvedBy } : {},
+    ),
+  rejectContent: (contentId: string, reason: string, author?: string) =>
+    postJson<{ content: ContentBundleView }>(
+      `/content/${encodeURIComponent(contentId)}/reject`,
+      author ? { reason, author } : { reason },
+    ),
+  platformAccounts: (projectId: string) =>
+    getJson<{ accounts: PlatformAccountView[] }>(
+      `/projects/${encodeURIComponent(projectId)}/platform-accounts`,
+    ),
+  createPlatformAccount: (
+    projectId: string,
+    body: {
+      platform: 'linkedin' | 'reddit' | 'tiktok' | 'youtube';
+      accountLabel: string;
+      remoteAccountId?: string | null;
+      accessToken?: string | null;
+      refreshToken?: string | null;
+    },
+  ) =>
+    postJson<{ account: PlatformAccountView }>(
+      `/projects/${encodeURIComponent(projectId)}/platform-accounts`,
+      body,
+    ),
+  createManualPackage: (contentId: string) =>
+    postJson<{ manualPackage: ManualPackageView }>(
+      `/content/${encodeURIComponent(contentId)}/manual-package`,
+      {},
+    ),
+  markManualPackagePublished: (packageId: string, platformAccountId: string) =>
+    postJson<{
+      publication: {
+        publicationId: string;
+        status: string;
+        publishedAt: number;
+        contentVersionId: string;
+        exactText: string;
+      };
+    }>(`/manual-packages/${encodeURIComponent(packageId)}/published`, { platformAccountId }),
 };
 
 export function formatUsd(microUsd: number): string {

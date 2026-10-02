@@ -14,6 +14,7 @@ export * from './repositories/job-events';
 export * from './repositories/jobs';
 export * from './repositories/llm-calls';
 export * from './repositories/project-memory';
+export * from './repositories/publishing';
 export * from './repositories/prompt-versions';
 export * from './repositories/settings';
 export * from './repositories/users';
