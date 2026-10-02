@@ -296,9 +296,20 @@ export const contentReviewNotes = sqliteTable(
 
 /**
  * Chaque opération de montage, avec le **plan exact** qui l'a produite
- * (docs/03 §10.3). Aucun montage à l'étape 4 : la table est créée avec son
- * domaine (docs/10 §1.3) et `media_assets` (étape 3) n'existe pas encore, donc
- * `output_asset_id` reste une colonne sans contrainte pour l'instant.
+ * (docs/03 §10.3).
+ *
+ * L'étape 4 a créé la table avec son domaine (docs/10 §1.3) ; l'étape 7 lui
+ * ajoute ce qu'un rendu réel exige — et rien de plus :
+ *
+ * - `content_version_id` : la **version de contenu** qui a produit ce rendu
+ *   (§15). Un contenu peut changer après un rendu ; sans ce lien, on croirait
+ *   que l'ancien montage correspond au texte actuel ;
+ * - `job_id` : le job qui exécute le rendu, pour suivre sa progression et
+ *   **reprendre** un rendu interrompu sans recréer de données métier ;
+ * - `validated_at` : la seule trace d'une validation humaine du rendu (§14). Ce
+ *   n'est pas un second état — le statut reste l'unique machine à états ;
+ * - un statut intermédiaire en deux temps (`preparing`, `rendering`) au lieu d'un
+ *   `running` unique : ce sont les deux phases longues que l'utilisateur voit.
  */
 export const videoRenders = sqliteTable(
   'video_renders',
@@ -308,9 +319,13 @@ export const videoRenders = sqliteTable(
       .notNull()
       .references(() => projects.id),
     content_item_id: text().references(() => contentItems.id),
+    /** La version **exacte** du texte/script qui a produit ce rendu (jamais « la dernière »). */
+    content_version_id: text()
+      .notNull()
+      .references(() => contentVersions.id),
     source_asset_ids_json: text().notNull(),
     output_asset_id: text(),
-    /** 'vertical_9_16'|'square_1_1'|'landscape_16_9'|'clip_short' */
+    /** 'vertical_9_16'|'square_1_1'|'landscape_16_9'|'clip_short' (un seul implémenté, étape 7). */
     preset: text().notNull(),
     edit_plan_json: text().notNull(),
     /** Les arguments **exacts** passés à FFmpeg : un rendu est reproductible ou il n'existe pas. */
@@ -321,19 +336,26 @@ export const videoRenders = sqliteTable(
     duration_ms: integer(),
     output_size_bytes: integer(),
     error_json: text(),
+    /** Job du worker qui exécute ce rendu : `null` tant qu'aucun n'a été enfilé. */
+    job_id: text(),
+    /** Horodatage de la validation humaine du rendu (docs/10 §4.7, écran de prévisualisation). */
+    validated_at: integer(),
     requested_at: integer().notNull(),
     started_at: integer(),
     finished_at: integer(),
   },
   (table) => [
     index('idx_renders_item').on(table.content_item_id, table.status),
+    index('idx_renders_version').on(table.content_version_id, table.status),
+    uniqueIndex('uq_renders_job').on(table.job_id),
     check(
       'chk_renders_preset',
       sql`${table.preset} in ('vertical_9_16','square_1_1','landscape_16_9','clip_short')`,
     ),
     check(
       'chk_renders_status',
-      sql`${table.status} in ('queued','running','completed','failed','cancelled')`,
+      sql`${table.status} in ('queued','preparing','rendering','completed','failed','cancelled')`,
     ),
+    check('chk_renders_progress', sql`${table.progress} between 0 and 100`),
   ],
 );

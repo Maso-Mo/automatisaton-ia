@@ -133,6 +133,26 @@ export const envSchema = z.object({
   // --- Vidéo
   FFMPEG_BIN: z.string().default('ffmpeg'),
   FFPROBE_BIN: z.string().default('ffprobe'),
+  /**
+   * Durée maximale d'un extrait rendu, en secondes (étape 7).
+   *
+   * C'est la borne de `docs/10` §4.7 : un short, pas un montage. Elle est
+   * vérifiée **côté API** (avant de créer le job) *et* côté worker (avant
+   * d'encoder) : un plan ne doit pas pouvoir allonger un rendu parce qu'une des
+   * deux extrémités a oublié de vérifier.
+   */
+  VIDEO_MAX_CLIP_S: integer({ default: 180, min: 5, max: 3_600, label: 'VIDEO_MAX_CLIP_S' }),
+  /**
+   * Délai maximal d'un encodage, en millisecondes. Au-delà, FFmpeg est tué, le
+   * fichier partiel supprimé, et l'erreur est **transitoire** (une reprise est
+   * légitime) : un encodage qui n'avance plus ne doit pas retenir le worker.
+   */
+  VIDEO_RENDER_TIMEOUT_MS: integer({
+    default: 900_000,
+    min: 10_000,
+    max: 7_200_000,
+    label: 'VIDEO_RENDER_TIMEOUT_MS',
+  }),
 
   // --- Plateformes
   LINKEDIN_CLIENT_ID: optionalText(),

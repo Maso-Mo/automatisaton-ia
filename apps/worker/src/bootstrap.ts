@@ -6,6 +6,7 @@ import {
   createEditorialStore,
   createMediaStore,
   createProjectMemoryStore,
+  createVideoRenderStore,
   missingTables,
   openDatabase,
   REQUIRED_TABLE_NAMES,
@@ -21,7 +22,13 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createJobRegistry, generateContentSpec, SqliteQueue, type JobRegistry } from '@aia/queue';
-import { LocalStorageAdapter, WhisperCppTranscriber, type Transcriber } from '@aia/media';
+import {
+  LocalStorageAdapter,
+  SpawnFfmpegRunner,
+  WhisperCppTranscriber,
+  type FFmpegRunner,
+  type Transcriber,
+} from '@aia/media';
 import { createSystemClock, createSystemRandom, uuidv7, type Clock } from '@aia/shared';
 import {
   PLATFORM_WRITER_AGENT,
@@ -37,7 +44,9 @@ import {
 } from '@aia/ai';
 import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
 import { createGenerateContentHandler } from './handlers/generate-content';
+import { createRenderVideoHandler } from './handlers/render-video';
 import { createTranscribeMediaHandler } from './handlers/transcribe-media';
+import { createSemaphore } from './features/semaphore';
 import { createNoopHandler, createScriptedProviderFactory } from './handlers/noop';
 import type { WriterProviderFactory } from './features/platform-writer';
 import { createWorkerLoop, type WorkerLoop } from './loop';
@@ -137,7 +146,13 @@ export interface WorkerContext {
 }
 
 export function buildWorker(
-  overrides: { config?: Config; logger?: AppLogger; transcriber?: Transcriber } = {},
+  overrides: {
+    config?: Config;
+    logger?: AppLogger;
+    transcriber?: Transcriber;
+    /** Lanceur FFmpeg injectable : les tests n'encodent pas de vraie vidéo. */
+    ffmpeg?: FFmpegRunner;
+  } = {},
 ): WorkerContext {
   const config = overrides.config ?? loadConfig();
   ensureLocalDirectories(config);
@@ -290,6 +305,36 @@ export function buildWorker(
       // pas la vérité sur sa durée, et un WebM tronqué peut annoncer 5 s pour
       // 40 min. Une valeur ici évite qu'un seul enregistrement bloque le worker.
       maxDurationMs: config.env.MEDIA_MAX_DURATION_S * 1_000,
+    }),
+  );
+
+  /**
+   * Rendu vidéo (étape 7) : FFmpeg est le seul binaire du pipeline, et il est
+   * **injectable** — les tests exercent le handler réel sans encoder une seconde
+   * de vidéo (docs/09 §1.1).
+   *
+   * Le sémaphore est unique et partagé : deux `render_video` réservés en parallèle
+   * (la file en réserve jusqu'à `QUEUE_CONCURRENCY`) s'exécutent l'un **après**
+   * l'autre. C'est le choix de confort de docs/05 §6.4 — garder la machine
+   * réactive prime sur le fait de finir plus tôt.
+   */
+  const ffmpeg: FFmpegRunner =
+    overrides.ffmpeg ??
+    new SpawnFfmpegRunner({
+      ffmpegBin: config.env.FFMPEG_BIN,
+      ffprobeBin: config.env.FFPROBE_BIN,
+      timeoutMs: config.env.VIDEO_RENDER_TIMEOUT_MS,
+    });
+
+  registry.register(
+    createRenderVideoHandler({
+      renders: createVideoRenderStore(handle, () => clock.nowMs()),
+      media,
+      storage,
+      ffmpeg,
+      clock,
+      semaphore: createSemaphore(1),
+      maxClipMs: config.env.VIDEO_MAX_CLIP_S * 1_000,
     }),
   );
 

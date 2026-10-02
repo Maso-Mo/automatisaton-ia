@@ -8,6 +8,7 @@ import { registerConversationRoutes } from './routes/conversations';
 import { registerEditorialRoutes } from './routes/editorial';
 import { registerPublishingRoutes } from './routes/publishing';
 import { registerMediaRoutes } from './routes/media';
+import { registerVideoRoutes } from './routes/videos';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -24,7 +25,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   });
 
   app.addContentTypeParser(
-    /^(audio\/.+|video\/webm|application\/ogg|application\/octet-stream)(?:;.*)?$/i,
+    /^(audio\/.+|video\/.+|application\/ogg|application\/octet-stream)(?:;.*)?$/i,
     { parseAs: 'buffer' },
     (_request, body, done) => done(null, body),
   );
@@ -35,7 +36,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 6 — entrée vocale et transcription locale',
+    step: 'étape 7 — rendu vidéo vertical sous-titré',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -90,6 +91,19 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /projects/:id/platform-accounts',
       'POST /content/:contentId/manual-package',
       'POST /manual-packages/:packageId/published',
+      'GET /media/video/capabilities',
+      'POST /projects/:id/videos',
+      'GET /projects/:id/videos',
+      'GET /media/assets/:assetId/file',
+      'POST /media/assets/:assetId/transcribe',
+      'POST /content/:contentId/video/plan',
+      'POST /content/:contentId/video/renders',
+      'GET /content/:contentId/renders',
+      'GET /projects/:id/renders',
+      'GET /renders/:renderId',
+      'POST /renders/:renderId/resume',
+      'POST /renders/:renderId/validate',
+      'GET /renders/:renderId/file',
     ],
   }));
 
@@ -98,6 +112,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerProjectRoutes(app, context);
   registerConversationRoutes(app, context);
   registerMediaRoutes(app, context);
+  registerVideoRoutes(app, context);
   registerEditorialRoutes(app, context);
   registerPublishingRoutes(app, context);
 

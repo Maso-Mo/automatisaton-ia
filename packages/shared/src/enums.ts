@@ -618,6 +618,81 @@ export const ASR_ENGINES = ['whisper_cpp', 'faster_whisper', 'cloud'] as const;
 export type AsrEngine = (typeof ASR_ENGINES)[number];
 export const asrEngineSchema = z.enum(ASR_ENGINES);
 
+// --- Vidéo (étape 7, docs/03 §10.3) ----------------------------------------
+
+/**
+ * États d'un **rendu vidéo**. C'est le seul système d'état du rendu : la
+ * progression détaillée (préparation, sous-titres, encodage, finalisation) vit
+ * dans les `job_events`, jamais dans un second statut concurrent (docs/10 §4.7).
+ *
+ * `preparing` couvre la préparation (lecture de la source, écriture des
+ * sous-titres) et `rendering` l'encodage FFmpeg : deux phases longues que
+ * l'utilisateur voit, et un seul état intermédiaire à la fois.
+ */
+export const VIDEO_RENDER_STATUSES = [
+  'queued',
+  'preparing',
+  'rendering',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+export type VideoRenderStatus = (typeof VIDEO_RENDER_STATUSES)[number];
+export const videoRenderStatusSchema = z.enum(VIDEO_RENDER_STATUSES);
+
+/**
+ * Presets de montage du modèle de données (docs/03 §10.3). **Un seul est
+ * implémenté** à l'étape 7 (`vertical_9_16`) : les autres existent dans le
+ * schéma pour ne pas migrer au moment où ils arriveront, et demander l'un d'eux
+ * aujourd'hui produit un refus explicite plutôt qu'un rendu silencieusement
+ * différent (docs/10 §4.7 : un seul format, sans transition).
+ */
+export const VIDEO_RENDER_PRESETS = [
+  'vertical_9_16',
+  'square_1_1',
+  'landscape_16_9',
+  'clip_short',
+] as const;
+export type VideoRenderPreset = (typeof VIDEO_RENDER_PRESETS)[number];
+export const videoRenderPresetSchema = z.enum(VIDEO_RENDER_PRESETS);
+
+/** Le seul preset **implémenté** : la liste ci-dessus est celle du modèle. */
+export const SUPPORTED_RENDER_PRESETS = [
+  'vertical_9_16',
+] as const satisfies readonly VideoRenderPreset[];
+
+/** Origine d'un plan de rendu : l'agent, ou le calcul déterministe de repli. */
+export const RENDER_PLAN_SOURCES = ['agent', 'fallback', 'manual'] as const;
+export type RenderPlanSource = (typeof RENDER_PLAN_SOURCES)[number];
+export const renderPlanSourceSchema = z.enum(RENDER_PLAN_SOURCES);
+
+/**
+ * Libellés d'écran des états de rendu. Comme pour les sujets et les contenus :
+ * l'interface ne traduit jamais un code brut elle-même, sinon un état ajouté au
+ * domaine passerait inaperçu.
+ */
+export const VIDEO_RENDER_STATUS_LABELS: Record<VideoRenderStatus, string> = {
+  queued: 'En file',
+  preparing: 'Préparation',
+  rendering: 'Encodage',
+  completed: 'Terminé',
+  failed: 'Échec',
+  cancelled: 'Annulé',
+};
+
+export const VIDEO_RENDER_PRESET_LABELS: Record<VideoRenderPreset, string> = {
+  vertical_9_16: 'Vertical 9:16 (1080 × 1920)',
+  square_1_1: 'Carré 1:1',
+  landscape_16_9: 'Paysage 16:9',
+  clip_short: 'Extrait court',
+};
+
+export const RENDER_PLAN_SOURCE_LABELS: Record<RenderPlanSource, string> = {
+  agent: 'Proposé par l’agent de montage',
+  fallback: 'Calculé par défaut (code)',
+  manual: 'Modifié à la main',
+};
+
 // --- Plateformes (câblées aux étapes 5 à 9) --------------------------------
 
 export const PLATFORM_IDS = [
@@ -674,6 +749,9 @@ export const ENUM_REGISTRY = {
   LLM_PROVIDER_IDS: { values: LLM_PROVIDER_IDS, schema: llmProviderIdSchema },
   STORAGE_DRIVERS: { values: STORAGE_DRIVERS, schema: storageDriverSchema },
   ASR_ENGINES: { values: ASR_ENGINES, schema: asrEngineSchema },
+  VIDEO_RENDER_STATUSES: { values: VIDEO_RENDER_STATUSES, schema: videoRenderStatusSchema },
+  VIDEO_RENDER_PRESETS: { values: VIDEO_RENDER_PRESETS, schema: videoRenderPresetSchema },
+  RENDER_PLAN_SOURCES: { values: RENDER_PLAN_SOURCES, schema: renderPlanSourceSchema },
   PLATFORM_IDS: { values: PLATFORM_IDS, schema: platformIdSchema },
   BUDGET_PERIODS: { values: BUDGET_PERIODS, schema: budgetPeriodSchema },
   CONVERSATION_KINDS: { values: CONVERSATION_KINDS, schema: conversationKindSchema },

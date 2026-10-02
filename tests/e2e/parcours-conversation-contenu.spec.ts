@@ -15,6 +15,10 @@ import {
   REGENERATION_MARKER,
   REJECTION_REASON,
   USER_TURN,
+  VIDEO_SOURCE_MIME,
+  VIDEO_SOURCE_NAME,
+  VIDEO_WINDOW_END,
+  VIDEO_WINDOW_START,
 } from './support/script';
 
 /**
@@ -112,6 +116,37 @@ async function latestJobStatus(request: APIRequestContext, type: string): Promis
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { jobs: Array<{ type: string; status: string }> };
   return body.jobs.find((job) => job.type === type)?.status ?? 'absent';
+}
+
+/** Les rendus vidéo d'un contenu, tels que l'API les a écrits (étape 7). */
+interface VideoRender {
+  id: string;
+  status: string;
+  contentVersionId: string;
+  validatedAt: number | null;
+  ffmpegArgs: string[];
+  plan: { startMs: number; endMs: number; source: string } | null;
+}
+
+async function contentRenders(
+  request: APIRequestContext,
+  contentId: string,
+): Promise<VideoRender[]> {
+  const response = await request.get(`/api/content/${contentId}/renders`);
+  expect(response.ok()).toBe(true);
+  return ((await response.json()) as { renders: VideoRender[] }).renders;
+}
+
+/**
+ * Une vidéo source **minimale** : `ftypisom`, donc reconnue comme un MP4 par la
+ * signature du contenu (docs/05 §5.1). Le lanceur FFmpeg du parcours étant
+ * scripté, le fichier n'a pas besoin d'être décodable — ce qui compte, c'est que
+ * l'API le refuse ou l'accepte selon son **en-tête**, jamais selon son nom.
+ */
+function videoFixture(bytes = 4_096): Buffer {
+  const video = Buffer.alloc(bytes, 0x42);
+  Buffer.from('\x00\x00\x00\x20ftypisom\x00\x00\x00\x00', 'binary').copy(video, 0);
+  return video;
 }
 
 test.describe('parcours 1 — de l’entretien à la publication manuelle', () => {
@@ -416,6 +451,88 @@ test.describe('parcours 1 — de l’entretien à la publication manuelle', () =
 
       // Les deux jobs d'écriture sont visibles, avec leur coût.
       await expect(page.getByText('generate_content').first()).toBeVisible();
+    });
+
+    await test.step('le montage vidéo : import, transcription, plan édité, rendu, aperçu', async () => {
+      // Le contenu LinkedIn est **publié** : sa version approuvée tient toujours,
+      // donc il reste montable — c'est le cas normal d'un short destiné à une
+      // autre plateforme, et l'API le vérifie sur `approvedVersionId`, pas sur
+      // l'état courant du contenu.
+      const projectId = await projectIdByName(request, PROJECT.name);
+      const bundles = await contentBundles(request, projectId);
+      const linkedin = bundles.find((bundle) => bundle.item.target === 'linkedin_post');
+      expect(
+        linkedin?.item.approvedVersionId,
+        'version approuvée du contenu LinkedIn',
+      ).toBeTruthy();
+
+      await openView(page, 'Montage vidéo');
+      await selectByLabel(page, 'Projet', PROJECT.name);
+      await page.getByLabel('Contenu approuvé').selectOption(linkedin?.item.id ?? '');
+
+      // 1. Importer la vidéo : reconnue par son en-tête, mesurée par ffprobe.
+      await page.getByLabel('Fichier vidéo').setInputFiles({
+        name: VIDEO_SOURCE_NAME,
+        mimeType: VIDEO_SOURCE_MIME,
+        buffer: videoFixture(),
+      });
+      const sourceCard = page.locator('li').filter({ hasText: '1920×1080' });
+      await expect(sourceCard).toContainText('Aucune transcription');
+
+      // 2. Transcrire : la progression vient du job réel, puis l'écran se rafraîchit.
+      await sourceCard.getByRole('button', { name: 'Transcrire' }).click();
+      await expect(page.getByText('Transcription de la vidéo')).toBeVisible();
+      await expect(sourceCard).toContainText('Transcription prête');
+      await expect(sourceCard).toContainText('3 segment(s)');
+
+      // 3. Choisir la vidéo et proposer un plan : aucun agent de montage n'est
+      //    configuré dans la pile, donc le repli calculé en code prend le relais
+      //    — et l'écran le dit au lieu de faire croire à une proposition du modèle.
+      await sourceCard.getByRole('button', { name: 'Choisir cette vidéo' }).click();
+      await page.getByRole('button', { name: 'Proposer un montage' }).click();
+      const planSummary = page.getByText(/Plan proposé/);
+      await expect(planSummary).toContainText('0:00.000 → 1:00.000');
+      await expect(page.getByText(/calculé par défaut/)).toBeVisible();
+
+      // 4. Éditer la fenêtre de l'extrait, puis lancer le rendu.
+      await page.getByLabel('Début de l’extrait').fill(VIDEO_WINDOW_START);
+      await page.getByLabel('Fin de l’extrait').fill(VIDEO_WINDOW_END);
+      await page.getByRole('button', { name: 'Lancer le rendu' }).click();
+
+      // 5. Le rendu se suit en direct, puis l'aperçu apparaît — sans rechargement.
+      const renderCard = page.locator('article[data-render]');
+      await expect(page.getByText('Encodage du short')).toBeVisible();
+      await expect(renderCard).toContainText('Terminé');
+      await expect(renderCard).toContainText('0:05.000 → 0:25.000 (0:20.000)');
+      await expect(renderCard).toContainText('rendu 0:20.000');
+      const preview = renderCard.getByLabel('Aperçu du short');
+      await expect(preview).toBeVisible();
+      await expect(preview).toHaveAttribute('src', /\/api\/renders\/.+\/file$/);
+
+      // 6. Valider : c'est la seule trace que quelqu'un a regardé ce montage.
+      await renderCard.getByRole('button', { name: 'Valider le montage' }).click();
+      await expect(renderCard.locator('[data-validated="true"]')).toBeVisible();
+
+      // 7. Ce que l'API a écrit, et pas seulement ce que l'écran affiche : le
+      //    rendu est rattaché à la **bonne** version de contenu, les bornes
+      //    éditées sont celles compilées, et les sous-titres viennent d'un nom
+      //    relatif (aucun chemin d'utilisateur dans le filtre FFmpeg).
+      const renders = await contentRenders(request, linkedin?.item.id ?? '');
+      expect(renders).toHaveLength(1);
+      const render = renders[0]!;
+      expect(render.contentVersionId).toBe(linkedin?.item.approvedVersionId);
+      expect(render.status).toBe('completed');
+      expect(render.validatedAt).not.toBeNull();
+      expect(render.plan?.source).toBe('manual');
+      expect(render.ffmpegArgs[render.ffmpegArgs.indexOf('-ss') + 1]).toBe('5.000');
+      expect(render.ffmpegArgs[render.ffmpegArgs.indexOf('-t') + 1]).toBe('20.000');
+      expect(render.ffmpegArgs.join(' ')).toContain('subtitles=subtitles.ass');
+
+      // Le contenu publié n'a pas bougé : un rendu est un **nouvel** asset.
+      const after = await contentBundles(request, projectId);
+      const linkedinAfter = after.find((bundle) => bundle.item.target === 'linkedin_post');
+      expect(linkedinAfter?.item.state).toBe('published');
+      expect(linkedinAfter?.version.body).toContain(DRAFT_BODY_FRAGMENT);
     });
   });
 });

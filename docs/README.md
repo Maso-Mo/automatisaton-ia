@@ -33,6 +33,10 @@
     enregistrement → téléversement vérifié → file → whisper.cpp → relecture → envoi
     confirmé, les trois défauts corrigés en chemin, et ce qui reste de l'étape 6
     (import de médias, sauvegarde/restauration, D3).
+18. **`17-mise-en-oeuvre-etape-7.md`** — rendu vidéo vertical sous-titré : import
+    vérifié → transcription → plan de montage proposé (puis modifiable) → job →
+    progression → aperçu → validation, la reprise d'un rendu interrompu, et le
+    **schéma seul** de la veille (dont le pipeline arrive à l'étape 10).
 
 
 ## Règles de rédaction

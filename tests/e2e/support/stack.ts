@@ -19,7 +19,7 @@ import {
   REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
-import { LocalStorageAdapter, ScriptedTranscriber } from '@aia/media';
+import { LocalStorageAdapter, ScriptedFfmpegRunner, ScriptedTranscriber } from '@aia/media';
 import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
 import { createLogger, type AppLogger } from '@aia/observability';
 import { createJobRegistry, generateContentSpec, SqliteQueue } from '@aia/queue';
@@ -33,7 +33,9 @@ import {
 import { buildServer } from '../../../apps/api/src/server';
 import { buildApi } from '../../../apps/api/src/bootstrap';
 import { createGenerateContentHandler } from '../../../apps/worker/src/handlers/generate-content';
+import { createRenderVideoHandler } from '../../../apps/worker/src/handlers/render-video';
 import { createTranscribeMediaHandler } from '../../../apps/worker/src/handlers/transcribe-media';
+import { createSemaphore } from '../../../apps/worker/src/features/semaphore';
 import { createWorkerLoop } from '../../../apps/worker/src/loop';
 import type { WriterProviderFactory } from '../../../apps/worker/src/features/platform-writer';
 import {
@@ -44,7 +46,7 @@ import {
 } from '../../support/conversation';
 import { defaultDrafts, defaultPlanOutput, scriptedAnglePlanner } from '../../support/editorial';
 import { e2eConfig } from './environment';
-import { REGENERATION_MARKER, VOICE_TRANSCRIPT } from './script';
+import { REGENERATION_MARKER, VIDEO_TRANSCRIPT_SEGMENT, VOICE_TRANSCRIPT } from './script';
 
 /**
  * La pile du parcours : **l'API et le worker**, sur une base neuve, avec le
@@ -84,7 +86,43 @@ const clock: Clock = createSystemClock();
  * sans binaire, sans modèle et sans réseau (docs/09 §1.1). Le texte servi vient
  * de `./script`, la même source que celle lue par la spécification navigateur.
  */
-const transcriber = new ScriptedTranscriber({ text: VOICE_TRANSCRIPT, durationMs: 4_200 });
+const transcriber = new ScriptedTranscriber({
+  text: VOICE_TRANSCRIPT,
+  durationMs: 4_200,
+  /**
+   * Trois segments, dont un **dans** la fenêtre que le parcours vidéo édite
+   * (5 s → 25 s) : sans parole transcrite dans l'extrait, l'API refuse le rendu
+   * (`VIDEO_NO_SUBTITLES_IN_WINDOW`) — et c'est exactement ce qu'une vidéo muette
+   * ou mal découpée produirait. Le parcours doit donc éditer une fenêtre qui
+   * contient de la parole, comme le ferait un utilisateur.
+   */
+  segments: [
+    { startMs: 0, endMs: 4_200, text: VOICE_TRANSCRIPT },
+    { startMs: 5_000, endMs: 18_000, text: VIDEO_TRANSCRIPT_SEGMENT },
+    { startMs: 18_000, endMs: 40_000, text: 'Deuxième étape : générer puis envoyer la facture.' },
+  ],
+});
+
+/**
+ * Le **lanceur FFmpeg scripté** (étape 7), partagé par l'API — qui mesure une
+ * source à l'import — et par le worker, qui encode : c'est une seule doublure,
+ * comme une seule installation FFmpeg en production.
+ *
+ * Il écrit vraiment son fichier de sortie (donc le handler mesure, hache,
+ * renomme et crée l'asset pour de bon) et émet une progression réelle. Ce que le
+ * parcours prouve ainsi : tout le **câblage** du rendu (plan → job → progression
+ * → fichier → aperçu), sans dépendre d'un encodage qui prendrait des minutes sur
+ * une machine lente. Le rendu réel, lui, est vérifié par
+ * `tests/integration/video-render-ffmpeg.test.ts`.
+ */
+const scriptedFfmpeg = new ScriptedFfmpegRunner({
+  probe: (path) =>
+    path.includes('/renders/')
+      ? { width: 1080, height: 1920, durationMs: 20_000 }
+      : { width: 1920, height: 1080, durationMs: 120_000 },
+  outputBytes: new Uint8Array(96_000),
+  progressStepsMs: [2_000, 4_000, 8_000, 12_000, 16_000, 20_000],
+});
 
 // --- L'API : l'entretien, la fiche maître et le plan sont scriptés ----------
 
@@ -112,6 +150,7 @@ const api = buildApi({
     }),
   },
   transcriber,
+  ffmpeg: scriptedFfmpeg,
 });
 
 const server = buildServer(api);
@@ -257,6 +296,26 @@ registry.register(
     transcriber,
     clock,
     maxDurationMs: config.env.MEDIA_MAX_DURATION_S * 1_000,
+  }),
+);
+
+/**
+ * Le handler de **rendu vidéo** (étape 7), avec le même lanceur scripté que
+ * l'API : le parcours traverse donc le vrai handler (plan relu, sous-titres
+ * écrits, progression écrite, asset créé), seul l'encodeur est remplacé.
+ *
+ * Le registre des rendus est celui de l'API (`api.renders`) : en production, une
+ * seule ligne `video_renders` existe, et c'est le même objet qui la lit ici.
+ */
+registry.register(
+  createRenderVideoHandler({
+    renders: api.renders,
+    media: createMediaStore(handle, () => clock.nowMs()),
+    storage: new LocalStorageAdapter(config.paths.mediaRoot),
+    ffmpeg: scriptedFfmpeg,
+    clock,
+    semaphore: createSemaphore(1),
+    maxClipMs: config.env.VIDEO_MAX_CLIP_S * 1_000,
   }),
 );
 

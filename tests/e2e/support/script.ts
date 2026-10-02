@@ -92,3 +92,23 @@ export const VOICE_TRANSCRIPT =
 
 /** La correction apportée à la main **avant** l'envoi : elle doit partir telle quelle. */
 export const VOICE_CORRECTION = 'Relu et corrigé : le montage tient en trois nœuds.';
+
+/**
+ * Parcours 3 — le **montage vidéo** (étape 7, docs/05 §6).
+ *
+ * Le fichier n'est pas une vraie vidéo : le lanceur FFmpeg du parcours est
+ * scripté (comme le modèle et le moteur de transcription). Ce que le parcours
+ * prouve, c'est le câblage — import, transcription, plan, édition des bornes,
+ * rendu, aperçu, validation — et non la qualité d'un encodage, qui est vérifiée
+ * par `tests/integration/video-render-ffmpeg.test.ts`.
+ */
+export const VIDEO_SOURCE_NAME = 'demonstration-facturation.mp4';
+export const VIDEO_SOURCE_MIME = 'video/mp4';
+
+/** La fenêtre modifiée à la main dans l'écran : ces bornes doivent partir telles quelles. */
+export const VIDEO_WINDOW_START = '0:05';
+export const VIDEO_WINDOW_END = '0:25';
+
+/** Un segment transcrit qui tombe **dans** la fenêtre éditée (sinon rien à sous-titrer). */
+export const VIDEO_TRANSCRIPT_SEGMENT =
+  'Première étape : connecter le formulaire au dossier de factures.';

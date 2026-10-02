@@ -13,10 +13,16 @@ export interface TranscribeMediaOutput {
 /**
  * Le handler du job `transcribe_media` : **local, sans réseau, idempotent**.
  *
- * Quatre décisions valent d'être explicitées, parce qu'elles décident du
+ * Il accepte l'**audio** (étape 6) et la **vidéo** (étape 7) : `docs/03` §10.2 ne
+ * distingue pas les deux — un transcript appartient à un `media_asset`, quel que
+ * soit son type. C'est ce qui donne à un short ses sous-titres brûlés : le fichier
+ * de la vidéo est décodé par FFmpeg (WhisperCppTranscriber normalise en WAV), et
+ * rien de l'image n'est lu.
+ *
+ * Cinq décisions valent d'être explicitées, parce qu'elles décident du
  * comportement en cas de panne :
  *
- * 1. **le fichier est vérifié avant d'appeler le décodeur** : un audio dont le
+ * 1. **le fichier est vérifié avant d'appeler le décodeur** : un média dont le
  *    fichier a disparu est un `not_found` (aucune reprise — réessayer ne fera
  *    pas réapparaître le fichier), pas une erreur transitoire ;
  * 2. **une transcription déjà là n'est pas refaite** : si un transcript du même
@@ -25,7 +31,9 @@ export interface TranscribeMediaOutput {
  * 3. **la durée n'est plafonnée qu'ici**, après décodage : l'API reçoit un
  *    fichier, pas une durée fiable. Un dépassement est un `validation` : pas de
  *    reprise, et l'utilisateur voit le motif ;
- * 4. **le handler ne décide d'aucune reprise** (docs/02 §12) : il lève une erreur
+ * 4. **un média sans piste audio ne peut pas être transcrit** : c'est un
+ *    `validation` explicite, pas un transcript vide ;
+ * 5. **le handler ne décide d'aucune reprise** (docs/02 §12) : il lève une erreur
  *    typée, la file tranche.
  */
 export function createTranscribeMediaHandler(deps: {
@@ -40,10 +48,16 @@ export function createTranscribeMediaHandler(deps: {
     ...transcribeMediaSpec,
     handler: async (input, ctx) => {
       const asset = deps.media.asset(input.assetId);
-      if (!asset || asset.kind !== 'audio') {
-        throw new NotFoundError(`Média audio introuvable : ${input.assetId}`, {
+      if (!asset || (asset.kind !== 'audio' && asset.kind !== 'video')) {
+        throw new NotFoundError(`Média introuvable : ${input.assetId}`, {
           code: 'MEDIA_ASSET_NOT_FOUND',
         });
+      }
+      if (asset.hasAudio === false) {
+        throw new ValidationError(
+          'Ce média n’a pas de piste audio : il ne peut pas être transcrit (donc pas sous-titré).',
+          { code: 'MEDIA_HAS_NO_AUDIO', details: { assetId: asset.id } },
+        );
       }
 
       await ctx.setStep('load_audio', 5);
@@ -106,8 +120,13 @@ export function createTranscribeMediaHandler(deps: {
         processingMs,
       });
       deps.media.updateAssetMetadata(asset.id, {
-        durationMs: result.durationMs,
-        codec: 'pcm_s16le',
+        // La durée **mesurée** d'une vidéo ne se remplace pas par celle du
+        // transcript : `ffprobe` a vu tout le fichier, le moteur n'a entendu que
+        // le son. Pour un audio téléversé sans mesure (durée inconnue), c'est en
+        // revanche la transcription qui apporte la première durée fiable — et
+        // elle seule sait alors combien de temps la piste dure.
+        durationMs: asset.durationMs ?? result.durationMs,
+        codec: asset.kind === 'video' ? asset.codec : 'pcm_s16le',
         language: result.language,
       });
 

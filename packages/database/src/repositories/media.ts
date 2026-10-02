@@ -8,14 +8,21 @@ export interface MediaAssetRecord {
   projectId: string | null;
   kind: 'audio' | 'image' | 'video' | 'document';
   role: string;
+  /** L'asset d'origine dont celui-ci dérive (un rendu vertical dérive d'une vidéo). */
+  parentAssetId: string | null;
   storageKey: string;
   originalFilename: string | null;
   mimeType: string;
   sizeBytes: number;
   sha256: string;
+  width: number | null;
+  height: number | null;
   durationMs: number | null;
+  bitrate: number | null;
   codec: string | null;
+  fps: number | null;
   hasAudio: boolean | null;
+  source: 'upload' | 'generated' | 'url_import' | 'render';
   language: string | null;
   usageCount: number;
   createdAt: number;
@@ -65,14 +72,20 @@ export function createMediaStore(handle: DatabaseHandle, nowMs: () => number) {
     projectId: row.project_id,
     kind: row.kind as MediaAssetRecord['kind'],
     role: row.role,
+    parentAssetId: row.parent_asset_id,
     storageKey: row.storage_key,
     originalFilename: row.original_filename,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
     sha256: row.sha256,
+    width: row.width,
+    height: row.height,
     durationMs: row.duration_ms,
+    bitrate: row.bitrate,
     codec: row.codec,
+    fps: row.fps,
     hasAudio: row.has_audio,
+    source: row.source as MediaAssetRecord['source'],
     language: row.language,
     usageCount: row.usage_count,
     createdAt: row.created_at,
@@ -107,6 +120,26 @@ export function createMediaStore(handle: DatabaseHandle, nowMs: () => number) {
         .where(and(eq(mediaAssets.project_id, projectId), eq(mediaAssets.sha256, sha256)))
         .get();
       return row ? toAsset(row) : null;
+    },
+    /**
+     * Les assets d'un projet, par type. Le tri est du plus récent au plus ancien :
+     * c'est ce que l'écran vidéo affiche (dernier import en haut), et il ne
+     * dépend donc pas de l'ordre d'insertion.
+     */
+    listAssets(
+      projectId: string,
+      filter: { kind?: MediaAssetRecord['kind']; limit?: number } = {},
+    ): MediaAssetRecord[] {
+      const conditions = [eq(mediaAssets.project_id, projectId), isNull(mediaAssets.deleted_at)];
+      if (filter.kind) conditions.push(eq(mediaAssets.kind, filter.kind));
+      return handle.db
+        .select()
+        .from(mediaAssets)
+        .where(and(...conditions))
+        .orderBy(desc(mediaAssets.created_at))
+        .limit(filter.limit ?? 50)
+        .all()
+        .map(toAsset);
     },
     /**
      * Les audios que **rien ne référence** et qui sont plus vieux que la fenêtre
@@ -171,6 +204,60 @@ export function createMediaStore(handle: DatabaseHandle, nowMs: () => number) {
           sha256: input.sha256,
           has_audio: true,
           source: 'upload',
+          created_at: nowMs(),
+        })
+        .run();
+      return this.asset(id)!;
+    },
+    /**
+     * Crée un **asset vidéo** — importé (`source: 'upload'`) ou produit par un
+     * rendu (`source: 'render'`, `role: 'vertical'` ou `'subtitled'`).
+     *
+     * Un rendu n'est **jamais** un remplacement : c'est un nouvel asset, rattaché à
+     * son original par `parentAssetId` (docs/05 §6.4 : « le rendu est un nouvel
+     * asset, jamais un remplacement »).
+     */
+    createVideoAsset(input: {
+      id?: string;
+      projectId: string;
+      role?: 'original' | 'vertical' | 'subtitled' | 'thumbnail' | 'poster';
+      parentAssetId?: string | null;
+      storageKey: string;
+      originalFilename?: string | null;
+      mimeType: string;
+      sizeBytes: number;
+      sha256: string;
+      width: number | null;
+      height: number | null;
+      durationMs: number | null;
+      codec: string | null;
+      fps: number | null;
+      hasAudio: boolean;
+      language?: string | null;
+      source: 'upload' | 'render';
+    }): MediaAssetRecord {
+      const id = input.id ?? newId();
+      handle.db
+        .insert(mediaAssets)
+        .values({
+          id,
+          project_id: input.projectId,
+          kind: 'video',
+          role: input.role ?? 'original',
+          parent_asset_id: input.parentAssetId ?? null,
+          storage_key: input.storageKey,
+          original_filename: input.originalFilename ?? null,
+          mime_type: input.mimeType,
+          size_bytes: input.sizeBytes,
+          sha256: input.sha256,
+          width: input.width,
+          height: input.height,
+          duration_ms: input.durationMs,
+          codec: input.codec,
+          fps: input.fps,
+          has_audio: input.hasAudio,
+          language: input.language ?? null,
+          source: input.source,
           created_at: nowMs(),
         })
         .run();

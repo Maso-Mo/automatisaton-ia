@@ -23,7 +23,7 @@ Ici, le texte du prompt envoyé au modèle.
 
 | Clé d'en-tête | Obligatoire | Rôle |
 |---|---|---|
-| `agent` | oui | `system`, `interviewer`, `strategist`, `copywriter`, `critic`, `fact_checker`, `analyst` |
+| `agent` | oui | `system`, `interviewer`, `strategist`, `copywriter`, `critic`, `fact_checker`, `media_planner`, `analyst` |
 | `task` | oui | identifiant de la tâche : `cost_probe`, `master_brief`, `linkedin_post`… |
 | `version` | non | libellé lisible (`v1`, `v2`) |
 | `notes` | non | raison d'être de la version |
@@ -53,3 +53,4 @@ erreur franche au lancement qu'un prompt silencieusement absent.
 | `editorial/` | `strategist`, fiche maître, rédacteurs par plateforme | 3-4 |
 | `review/` | vérification factuelle, critique, anti-spam | 5 |
 | `media/` | sous-titres, titres de vidéo, descriptions | 6-7 |
+| `media_planner/` | plan de montage du short vertical (`video_plan`) | 7 |

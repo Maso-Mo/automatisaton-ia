@@ -122,15 +122,16 @@ describe('migration ascendante de la mémoire des projets', () => {
     seedStepOne(handle);
 
     const second = applyMigrations(handle);
-    // Cinq migrations s'appliquent sur la base peuplée : `0001` (mémoire des
+    // Six migrations s'appliquent sur la base peuplée : `0001` (mémoire des
     // projets), `0002` (conversation et fiche maître) puis `0003` (contenus
-    // versionnés, veille et observabilité), `0004` (publication manuelle) et
-    // `0005` (audio, transcriptions et pièces jointes de message). La deuxième
-    // reconstruit `project_facts` pour y ajouter la clé étrangère vers
-    // `messages` : c'est exactement le genre de migration qui casse une base
-    // utilisateur si elle n'est pas testée sur des données réelles.
-    expect(second.applied).toBe(5);
-    expect(appliedMigrationCount(handle)).toBe(6);
+    // versionnés, veille et observabilité), `0004` (publication manuelle),
+    // `0005` (audio, transcriptions et pièces jointes de message) et `0006` (le
+    // schéma de la veille et le rendu vidéo vertical). La deuxième reconstruit
+    // `project_facts` pour y ajouter la clé étrangère vers `messages` : c'est
+    // exactement le genre de migration qui casse une base utilisateur si elle
+    // n'est pas testée sur des données réelles.
+    expect(second.applied).toBe(6);
+    expect(appliedMigrationCount(handle)).toBe(7);
 
     const rows = handle.sqlite
       .prepare(

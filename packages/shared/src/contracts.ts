@@ -329,3 +329,56 @@ export const factCheckerOutputSchema = z.object({
     .max(30),
 });
 export type FactCheckerOutput = z.infer<typeof factCheckerOutputSchema>;
+
+// --- Étape 7 : plan de rendu vidéo (docs/04 §4.7, docs/05 §6.3) -------------
+
+/** Durée minimale d'un extrait : en dessous, il n'y a pas de short, il y a un accident. */
+export const RENDER_CLIP_MIN_MS = 1_000;
+/** Durée maximale d'un extrait retenu : trois minutes, la borne d'un short. */
+export const RENDER_CLIP_MAX_MS = 180_000;
+export const RENDER_PLAN_REASON_MIN = 10;
+export const RENDER_PLAN_REASON_MAX = 600;
+
+/**
+ * Les champs du plan, sans le contrôle de durée : le schéma objet est réutilisé
+ * tel quel pour le plan **stocké** (proposition + provenance), ce qui évite deux
+ * définitions qui divergeraient au premier champ ajouté.
+ */
+export const renderPlanFieldsSchema = z.object({
+  startMs: z.number().int().min(0),
+  endMs: z.number().int().positive(),
+  /** Sous-titres **brûlés** : le seul mode de l'étape (aucun fichier externe, aucune publication). */
+  subtitleMode: z.literal('burned'),
+  /** Recadrage **centré** : pas de suivi de visage, pas de recadrage mobile (docs/10 §4.7). */
+  crop: z.literal('vertical_center'),
+  /** Pourquoi cet extrait : affiché à l'utilisateur, et modifiable avec lui. */
+  reason: z.string().min(RENDER_PLAN_REASON_MIN).max(RENDER_PLAN_REASON_MAX),
+});
+
+/**
+ * Le plan **proposé par `media_planner`**, et rien de plus que ce que l'étape 7
+ * sait exécuter : un extrait, des sous-titres brûlés, un recadrage centré.
+ *
+ * Ce schéma est la **seule** porte d'entrée du plan : la route HTTP le valide,
+ * l'agent est contraint de le produire, et le worker refuse tout plan qui ne
+ * l'a pas traversé. Les bornes temporelles réelles (durée de la vidéo, durée
+ * maximale de l'extrait) sont vérifiées **en code**, après le schéma, parce
+ * qu'un schéma ne connaît pas la durée du média.
+ *
+ * Aucun champ de détection de « moment fort » : pas de score, pas de vision,
+ * pas de musique, pas de transition (docs/10 §4.7, interdits de l'étape).
+ */
+export const renderPlanProposalSchema = renderPlanFieldsSchema
+  .refine((plan) => plan.endMs > plan.startMs, {
+    message: 'segment invalide : la fin précède le début',
+  })
+  .refine((plan) => plan.endMs - plan.startMs >= RENDER_CLIP_MIN_MS, {
+    message: `extrait trop court : moins de ${RENDER_CLIP_MIN_MS} ms`,
+  });
+export type RenderPlanProposal = z.infer<typeof renderPlanProposalSchema>;
+
+/** Le plan tel qu'il est **stocké** : la proposition + sa provenance. */
+export const storedRenderPlanSchema = renderPlanFieldsSchema.extend({
+  source: z.enum(['agent', 'fallback', 'manual']),
+});
+export type StoredRenderPlan = z.infer<typeof storedRenderPlanSchema>;

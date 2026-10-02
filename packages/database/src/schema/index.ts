@@ -14,6 +14,7 @@ import { getTableName } from 'drizzle-orm';
 export * from './conversation';
 export * from './editorial';
 export * from './media';
+export * from './news';
 export * from './projects';
 export * from './publishing';
 export * from './system';
@@ -55,6 +56,7 @@ import {
   publications,
 } from './publishing';
 import { mediaAssets, messageAttachments, transcripts } from './media';
+import { newsItems, newsSources } from './news';
 
 /** Liste de référence : sert aux tests de migration et au diagnostic. */
 export const STEP_ONE_TABLES = [
@@ -149,6 +151,16 @@ export const STEP_SIX_TABLE_NAMES: readonly string[] = [
 
 export const STEP_SIX_TABLES = [mediaAssets, transcripts, messageAttachments] as const;
 
+/**
+ * Les **deux tables de l'étape 7** : la veille (docs/03 §13). Le **schéma**
+ * seulement — la collecte, le scoring et le LLM de veille arrivent à l'étape 10
+ * (docs/10 §4.7, §4.10). Les créer ici évite une seconde migration qui toucherait
+ * le même code d'ingestion externe.
+ */
+export const STEP_SEVEN_TABLE_NAMES: readonly string[] = ['news_sources', 'news_items'];
+
+export const STEP_SEVEN_TABLES = [newsSources, newsItems] as const;
+
 /** Les deux tables éditoriales de l'étape 3, avec les autres : elles vivent dans `./editorial`. */
 export const STEP_THREE_EDITORIAL_TABLES = [contentSubjects, subjectAngles] as const;
 
@@ -169,4 +181,5 @@ export const REQUIRED_TABLE_NAMES: readonly string[] = [
   ...STEP_FOUR_TABLE_NAMES,
   ...STEP_FIVE_TABLE_NAMES,
   ...STEP_SIX_TABLE_NAMES,
+  ...STEP_SEVEN_TABLE_NAMES,
 ];

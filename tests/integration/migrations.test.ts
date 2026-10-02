@@ -6,6 +6,7 @@ import {
   STEP_THREE_TABLE_NAMES,
   STEP_FOUR_TABLE_NAMES,
   STEP_FIVE_TABLE_NAMES,
+  STEP_SEVEN_TABLE_NAMES,
   STEP_SIX_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
@@ -45,6 +46,7 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       ...STEP_FOUR_TABLE_NAMES,
       ...STEP_FIVE_TABLE_NAMES,
       ...STEP_SIX_TABLE_NAMES,
+      ...STEP_SEVEN_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
@@ -80,6 +82,10 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
     // `message_attachments` est ce qui rend un audio **introuvable à supprimer**
     // une fois envoyé — la preuve de ce qui a été dit.
     expect(STEP_SIX_TABLE_NAMES).toEqual(['media_assets', 'transcripts', 'message_attachments']);
+    // Les deux tables de l'étape 7 (docs/03 §13) : la veille, **schéma seulement**.
+    // Le pipeline arrive à l'étape 10 ; ce qui est vérifié ici, c'est que le modèle
+    // de données existe vraiment — c'est le seul écart assumé du plan (docs/10 §4.7).
+    expect(STEP_SEVEN_TABLE_NAMES).toEqual(['news_sources', 'news_items']);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });
 

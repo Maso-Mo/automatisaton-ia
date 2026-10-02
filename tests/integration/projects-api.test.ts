@@ -45,8 +45,8 @@ describe('API des projets (docs/10 §4.2)', () => {
     const { app } = makeApi();
     const body = (await app.inject({ method: 'GET', url: '/' })).json();
     // Les étapes précédentes ne sont pas retirées : la racine annonce l'étape
-    // courante (6) et conserve les points d'entrée des projets.
-    expect(body.step).toContain('étape 6');
+    // courante (7) et conserve les points d'entrée des projets.
+    expect(body.step).toContain('étape 7');
     expect(body.endpoints).toContain('POST /projects');
     expect(body.endpoints).toContain('GET /projects/:id/context');
   });

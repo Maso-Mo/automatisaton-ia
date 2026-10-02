@@ -1,12 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { CapabilityError, InternalError, ValidationError, type AsrEngine } from '@aia/shared';
+import { spawnCommand, type CommandResult, type CommandRunner } from './exec';
 
+export * from './exec';
+export * from './ffmpeg';
+export * from './hash';
 export * from './retention';
+export * from './subtitles';
+export * from './video';
 
 export interface StorageAdapter {
   put(key: string, data: Uint8Array): Promise<void>;
@@ -178,38 +183,7 @@ export interface Transcriber {
   transcribe(inputPath: string, language?: string): Promise<TranscriptionResult>;
 }
 
-export interface CommandResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
-export type CommandRunner = (command: string, args: readonly string[]) => Promise<CommandResult>;
-
-export const spawnCommand: CommandRunner = async (command, args) =>
-  new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let outputSize = 0;
-    const outputLimit = 1024 * 1024;
-
-    const collect = (target: Buffer[], chunk: Buffer): void => {
-      if (outputSize >= outputLimit) return;
-      outputSize += chunk.length;
-      target.push(chunk.subarray(0, Math.max(0, outputLimit - outputSize + chunk.length)));
-    };
-    child.stdout.on('data', (chunk: Buffer) => collect(stdout, chunk));
-    child.stderr.on('data', (chunk: Buffer) => collect(stderr, chunk));
-    child.once('error', reject);
-    child.once('close', (exitCode) => {
-      resolvePromise({
-        exitCode: exitCode ?? -1,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-      });
-    });
-  });
+export * from './exec';
 
 export function buildNormalizeAudioArgs(inputPath: string, outputPath: string): string[] {
   return [

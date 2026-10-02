@@ -4,6 +4,7 @@ import {
   createFactCheckerAgent,
   createInterviewerAgent,
   createLlmProvider,
+  createMediaPlannerAgent,
   createStrategistAgent,
   loadActivePrompt,
   withRecording,
@@ -12,6 +13,7 @@ import {
   type CriticInput,
   type FactCheckerInput,
   type InterviewerInput,
+  type MediaPlannerInput,
   type PromptSource,
   type StrategistInput,
 } from '@aia/ai';
@@ -30,6 +32,7 @@ import {
   type InterviewerOutput,
   type LlmProviderId,
   type MasterBriefOutput,
+  type RenderPlanProposal,
 } from '@aia/shared';
 import type { LlmCallRecorder } from '@aia/ai';
 
@@ -76,6 +79,13 @@ export interface EditorialAgents {
   anglePlanner(): EditorialAgentBundle<AnglePlannerInput, EditorialPlanOutput>;
   critic?(): EditorialAgentBundle<CriticInput, CriticOutput>;
   factChecker?(): EditorialAgentBundle<FactCheckerInput, FactCheckerOutput>;
+  /**
+   * Étape 7 : le plan de montage est proposé par l'**API** (l'utilisateur attend
+   * une réponse immédiate), jamais par le worker — qui, lui, obéit au plan validé.
+   * `optionnel` n'est pas une facilité : sans cet agent, `proposeVideoPlan`
+   * calcule un plan en code et la fonctionnalité reste utilisable (docs/05 §6.3).
+   */
+  mediaPlanner?(): EditorialAgentBundle<MediaPlannerInput, RenderPlanProposal>;
 }
 
 /** Clé du fournisseur par défaut : jamais lue ailleurs, jamais journalisée. */
@@ -88,8 +98,9 @@ export function createConversationAgents(
 ): ConversationAgents & EditorialAgents {
   const providerId = deps.config.env.LLM_DEFAULT_PROVIDER;
 
-  const modelFor = (task: 'converse' | 'master_brief' | 'angles' | 'review' | 'assess'): string =>
-    llmModelFor(deps.config.env, task === 'converse' ? 'light' : 'standard');
+  const modelFor = (
+    task: 'converse' | 'master_brief' | 'angles' | 'review' | 'assess' | 'video_plan',
+  ): string => llmModelFor(deps.config.env, task === 'converse' ? 'light' : 'standard');
 
   /**
    * Un agent = un prompt actif + un fournisseur enregistré. Le bundle est
@@ -117,7 +128,9 @@ export function createConversationAgents(
     const inner = createLlmProvider({
       providerId,
       apiKey: apiKeyForProvider(deps.config, providerId),
-      model: modelFor(task as 'converse' | 'master_brief' | 'angles' | 'review' | 'assess'),
+      model: modelFor(
+        task as 'converse' | 'master_brief' | 'angles' | 'review' | 'assess' | 'video_plan',
+      ),
       clock: deps.clock,
       localBaseUrl: `${deps.config.env.OLLAMA_BASE_URL}/v1`,
     });
@@ -167,6 +180,12 @@ export function createConversationAgents(
     factChecker: () =>
       bind<FactCheckerInput, FactCheckerOutput>('fact_checker', 'assess', (provider, prompt) =>
         createFactCheckerAgent({ provider, prompt }),
+      ),
+    mediaPlanner: () =>
+      bind<MediaPlannerInput, RenderPlanProposal>(
+        'media_planner',
+        'video_plan',
+        (provider, prompt) => createMediaPlannerAgent({ provider, prompt }),
       ),
   };
 }

@@ -607,6 +607,122 @@ export interface ContentDetailView {
   validation: DraftValidationView | null;
 }
 
+// --- Montage vidéo (étape 7, docs/10 §4.7) ---------------------------------
+
+/** Ce qu'une vidéo source est, tel que l'API le mesure — jamais tel qu'on le suppose. */
+export interface VideoAssetView {
+  id: string;
+  projectId: string | null;
+  role: string;
+  parentAssetId: string | null;
+  storageKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  codec: string | null;
+  hasAudio: boolean | null;
+  source: string;
+  createdAt: number;
+  transcript: { available: boolean; edited: boolean; language: string | null; segments: number };
+}
+
+export interface VideoCapabilitiesView {
+  format: {
+    preset: string;
+    width: number;
+    height: number;
+    fps: number;
+    container: string;
+    videoCodec: string;
+    audioCodec: string;
+    label: string;
+  };
+  presets: Array<{ value: string; label: string; supported: boolean }>;
+  renderStatuses: Array<{ value: string; label: string }>;
+  planSources: Array<{ value: string; label: string }>;
+  subtitleModes: Array<{ value: string; label: string }>;
+  crops: Array<{ value: string; label: string }>;
+  acceptedMimeTypes: string[];
+  acceptedCodecs: string[];
+  maxUploadBytes: number;
+  maxDurationMs: number;
+  maxClipMs: number;
+  ffmpeg: boolean;
+}
+
+export interface VideoPlanView {
+  plan: {
+    startMs: number;
+    endMs: number;
+    subtitleMode: 'burned';
+    crop: 'vertical_center';
+    reason: string;
+    source: 'agent' | 'fallback' | 'manual';
+  };
+  warnings: string[];
+  usedFallback: boolean;
+  fallbackReason: string | null;
+  content: {
+    contentItemId: string;
+    contentVersionId: string;
+    target: string;
+    title: string | null;
+  };
+  video: {
+    assetId: string;
+    durationMs: number;
+    width: number | null;
+    height: number | null;
+    hasAudio: boolean;
+    codec: string | null;
+  };
+  transcript: { available: boolean; segments: number; language: string | null };
+  policy: {
+    preset: string;
+    width: number;
+    height: number;
+    fps: number;
+    container: string;
+    maxClipMs: number;
+    subtitleMode: 'burned';
+    crop: 'vertical_center';
+  };
+  usage: { costMicroUsd: number } | null;
+  repaired: boolean;
+}
+
+export interface VideoRenderView {
+  id: string;
+  projectId: string;
+  contentItemId: string | null;
+  contentVersionId: string;
+  sourceAssetIds: string[];
+  outputAssetId: string | null;
+  preset: string;
+  plan: {
+    startMs: number;
+    endMs: number;
+    subtitleMode: 'burned';
+    crop: 'vertical_center';
+    reason: string;
+    source: string;
+  } | null;
+  ffmpegArgs: string[];
+  ffmpegVersion: string | null;
+  status: string;
+  progress: number;
+  durationMs: number | null;
+  outputSizeBytes: number | null;
+  error: { message?: string; code?: string } | null;
+  jobId: string | null;
+  validatedAt: number | null;
+  requestedAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
@@ -850,6 +966,66 @@ export const api = {
         exactText: string;
       };
     }>(`/manual-packages/${encodeURIComponent(packageId)}/published`, { platformAccountId }),
+
+  // --- Montage vidéo (étape 7) --------------------------------------------
+
+  /** Format unique, bornes réelles et disponibilité de FFmpeg : servis par l'API. */
+  videoCapabilities: () => getJson<VideoCapabilitiesView>('/media/video/capabilities'),
+  projectVideos: (projectId: string) =>
+    getJson<{ videos: VideoAssetView[] }>(`/projects/${encodeURIComponent(projectId)}/videos`),
+  /** Le corps de la requête **est** le fichier : comme pour la voix. */
+  uploadVideo: (projectId: string, file: Blob) =>
+    request<{ video: VideoAssetView; warnings: string[]; deduplicated: boolean }>(
+      `/projects/${encodeURIComponent(projectId)}/videos`,
+      {
+        method: 'POST',
+        body: file,
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+      },
+    ),
+  transcribeVideo: (assetId: string, language = 'fr') =>
+    postJson<{ asset: VideoAssetView; jobId: string }>(
+      `/media/assets/${encodeURIComponent(assetId)}/transcribe`,
+      { language },
+    ),
+  proposeVideoPlan: (contentId: string, sourceAssetId: string) =>
+    postJson<VideoPlanView>(`/content/${encodeURIComponent(contentId)}/video/plan`, {
+      sourceAssetId,
+    }),
+  createVideoRender: (
+    contentId: string,
+    body: {
+      sourceAssetId: string;
+      planSource?: 'agent' | 'fallback' | 'manual';
+      plan: {
+        startMs: number;
+        endMs: number;
+        subtitleMode: 'burned';
+        crop: 'vertical_center';
+        reason: string;
+      };
+    },
+  ) =>
+    postJson<{ render: VideoRenderView; jobId: string; warnings: string[] }>(
+      `/content/${encodeURIComponent(contentId)}/video/renders`,
+      body,
+    ),
+  contentRenders: (contentId: string) =>
+    getJson<{ renders: VideoRenderView[] }>(`/content/${encodeURIComponent(contentId)}/renders`),
+  resumeVideoRender: (renderId: string) =>
+    postJson<{ render: VideoRenderView; jobId: string }>(
+      `/renders/${encodeURIComponent(renderId)}/resume`,
+      {},
+    ),
+  validateVideoRender: (renderId: string) =>
+    postJson<{ render: VideoRenderView }>(`/renders/${encodeURIComponent(renderId)}/validate`, {}),
+  /**
+   * L'URL du fichier rendu : c'est elle que le lecteur de l'aperçu utilise. Le
+   * préfixe `/api` est celui du proxy de Vite (aucune autre origine, donc aucun
+   * CORS — cf. `vite.config.ts`).
+   */
+  renderFileUrl: (renderId: string) => `/api/renders/${encodeURIComponent(renderId)}/file`,
+  sourceFileUrl: (assetId: string) => `/api/media/assets/${encodeURIComponent(assetId)}/file`,
 };
 
 export function formatUsd(microUsd: number): string {

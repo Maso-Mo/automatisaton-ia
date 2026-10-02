@@ -7,6 +7,7 @@ import {
   createMediaStore,
   createProjectMemoryStore,
   createPublishingStore,
+  createVideoRenderStore,
   getJob,
   isWalEnabled,
   lastCompletedJob,
@@ -35,13 +36,16 @@ import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } f
 import {
   createJobRegistry,
   generateContentSpec,
+  renderVideoSpec,
   transcribeMediaSpec,
   SqliteQueue,
   type Queue,
 } from '@aia/queue';
 import {
   LocalStorageAdapter,
+  SpawnFfmpegRunner,
   WhisperCppTranscriber,
+  type FFmpegRunner,
   type StorageAdapter,
   type Transcriber,
 } from '@aia/media';
@@ -61,6 +65,7 @@ import {
 } from './features/agents';
 import type { ConversationFeatureDeps } from './features/conversation';
 import type { EditorialFeatureDeps } from './features/editorial';
+import type { MediaPlannerAgentLike, VideoFeatureDeps } from './features/media';
 
 const APP_VERSION = '0.1.0';
 const STARTED_AT = Date.now();
@@ -89,6 +94,12 @@ export interface ApiContext {
   editorial: EditorialFeatureDeps;
   publishing: ReturnType<typeof createPublishingStore>;
   media: ReturnType<typeof createMediaStore>;
+  /**
+   * Étape 7 : import des vidéos, proposition du plan, suivi du rendu. Le rendu
+   * lui-même n'est pas ici — il est un job du worker (docs/02 §5).
+   */
+  video: VideoFeatureDeps;
+  renders: ReturnType<typeof createVideoRenderStore>;
   mediaStorage: StorageAdapter;
   transcriber: Transcriber;
   mediaQueue: Pick<Queue, 'enqueue'>;
@@ -118,7 +129,17 @@ export function buildApi(
      */
     editorialQueue?: Pick<Queue, 'enqueue'>;
     mediaQueue?: Pick<Queue, 'enqueue'>;
+    /** La file qui reçoit les rendus vidéo (même file en production). */
+    videoQueue?: Pick<Queue, 'enqueue'>;
     transcriber?: Transcriber;
+    /**
+     * L'agent de montage est injectable : les tests HTTP proposent un plan
+     * **scripté**, sans réseau ni coût. En production, la fabrique par défaut le
+     * construit depuis le prompt actif `media_planner/video_plan` (docs/04 §4.7).
+     */
+    videoPlanner?: MediaPlannerAgentLike;
+    /** Lanceur FFmpeg injectable : aucun test HTTP n'encode une vraie vidéo. */
+    ffmpeg?: FFmpegRunner;
   } = {},
 ): ApiContext {
   const config = overrides.config ?? loadConfig();
@@ -242,19 +263,25 @@ export function buildApi(
     newId: () => uuidv7(clock.nowMs()),
   };
 
+  /**
+   * Les agents de l'API. La fabrique `createConversationAgents` ne fait **rien**
+   * à la construction (pas de prompt lu, pas de client créé : tout se passe à
+   * l'appel de `bind`) : la construire une fois et la partager entre conversation,
+   * éditorial et montage garde une seule fabrique pour trois usages.
+   */
+  const defaultApiAgents = createConversationAgents({
+    config,
+    handle,
+    clock,
+    logger,
+    budget,
+    recorder: createLlmCallRecorder(handle, clock),
+  });
+
   const conversationFeature: ConversationFeatureDeps = {
     memory,
     ports: conversation,
-    agents:
-      overrides.agents ??
-      createConversationAgents({
-        config,
-        handle,
-        clock,
-        logger,
-        budget,
-        recorder: createLlmCallRecorder(handle, clock),
-      }),
+    agents: overrides.agents ?? defaultApiAgents,
     logger,
   };
 
@@ -281,6 +308,9 @@ export function buildApi(
     const registry = createJobRegistry();
     registry.registerSpec(generateContentSpec);
     registry.registerSpec(transcribeMediaSpec);
+    // Étape 7 : l'API écrit des rendus, elle ne les exécute pas. Enregistrer la
+    // **spécification** suffit donc — le handler vit dans le worker.
+    registry.registerSpec(renderVideoSpec);
     return new SqliteQueue({
       db: handle,
       registry,
@@ -293,24 +323,23 @@ export function buildApi(
   })();
   const producerQueue: Pick<Queue, 'enqueue'> = overrides.editorialQueue ?? defaultProducerQueue;
 
+  /**
+   * L'éditorial et le montage partagent les mêmes agents que la conversation :
+   * une seule fabrique (`defaultApiAgents`), donc un seul plafond de budget et
+   * un seul journal `llm_calls`.
+   */
+  const editorialAgents: EditorialAgents = overrides.editorialAgents ?? defaultApiAgents;
+
   const editorial: EditorialFeatureDeps = {
     memory,
     ports: editorialPorts,
-    agents:
-      overrides.editorialAgents ??
-      createConversationAgents({
-        config,
-        handle,
-        clock,
-        logger,
-        budget,
-        recorder: createLlmCallRecorder(handle, clock),
-      }),
+    agents: editorialAgents,
     queue: producerQueue,
     logger,
   };
   const publishing = createPublishingStore(handle, () => clock.nowMs());
   const media = createMediaStore(handle, () => clock.nowMs());
+  const renders = createVideoRenderStore(handle, () => clock.nowMs());
   const mediaStorage = new LocalStorageAdapter(config.paths.mediaRoot);
   const modelPath = isAbsolute(config.env.WHISPER_MODEL_PATH)
     ? config.env.WHISPER_MODEL_PATH
@@ -323,6 +352,37 @@ export function buildApi(
       modelPath,
     });
   const mediaQueue = overrides.mediaQueue ?? defaultProducerQueue;
+
+  /**
+   * FFmpeg (étape 7) : l'API s'en sert pour **mesurer** une source au moment de
+   * l'import (durée, codec, audio) — jamais pour encoder. L'encodage est un job
+   * du worker, avec son propre lanceur et son délai maximal.
+   *
+   * Aucun délai n'est passé ici : `probe()` borne déjà chaque mesure à 60 s, et
+   * une mesure ne doit jamais hériter du délai d'un encodage (`VIDEO_RENDER_TIMEOUT_MS`).
+   */
+  const ffmpeg: FFmpegRunner =
+    overrides.ffmpeg ??
+    new SpawnFfmpegRunner({
+      ffmpegBin: config.env.FFMPEG_BIN,
+      ffprobeBin: config.env.FFPROBE_BIN,
+    });
+
+  const video: VideoFeatureDeps = {
+    media,
+    renders,
+    ports: editorialPorts,
+    storage: mediaStorage,
+    ffmpeg,
+    // Le bundle est construit **à la demande** : un prompt absent ne doit pas
+    // empêcher l'API de démarrer, et le repli calculé en code existe pour ça.
+    planner: () => overrides.videoPlanner ?? editorialAgents.mediaPlanner?.(),
+    queue: overrides.videoQueue ?? defaultProducerQueue,
+    logger,
+    clock,
+    maxClipMs: config.env.VIDEO_MAX_CLIP_S * 1_000,
+    maxVideoDurationMs: config.env.MEDIA_MAX_DURATION_S * 1_000,
+  };
 
   return {
     config,
@@ -337,6 +397,8 @@ export function buildApi(
     editorial,
     publishing,
     media,
+    video,
+    renders,
     mediaStorage,
     transcriber,
     mediaQueue,

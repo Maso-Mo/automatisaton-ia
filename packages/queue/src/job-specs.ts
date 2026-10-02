@@ -68,6 +68,44 @@ export const transcribeMediaSpec: JobSpec<TranscribeMediaInput> = {
 };
 
 /**
+ * Rendu d'un short vertical (étape 7, docs/05 §6.4).
+ *
+ * L'entrée ne porte **que** l'identifiant du rendu : le plan, la source et la
+ * version de contenu vivent dans `video_renders`. C'est ce qui rend la reprise
+ * possible sans recréer de données métier — un job rejoué relit le même plan
+ * (docs/10 §4.7, critère de sortie « un rendu interrompu reprend sans repartir de
+ * zéro »).
+ *
+ * Politique : `priority: 8` (batch, comme l'annonce docs/05 §6.4), bails courts
+ * renouvelés par le battement de cœur du worker, `idempotent: true` (le handler
+ * écrase son fichier temporaire et ne crée le rendu qu'une fois), et une clé de
+ * déduplication par rendu : demander deux fois « générer » sur le même rendu ne
+ * paie pas deux encodages.
+ */
+export const RENDER_VIDEO_JOB = 'render_video';
+
+export const renderVideoInputSchema = z.object({
+  renderId: z.string().min(1),
+});
+
+export type RenderVideoInput = z.infer<typeof renderVideoInputSchema>;
+
+export const renderVideoSpec: JobSpec<RenderVideoInput> = {
+  type: RENDER_VIDEO_JOB,
+  inputSchema: renderVideoInputSchema,
+  // Deux tentatives : un encodage tué par un arrêt du worker ou par un délai
+  // mérite une reprise ; un plan invalide ou une source illisible n'en mérite
+  // aucune, et c'est la catégorie d'erreur qui tranche (docs/02 §12).
+  maxAttempts: 2,
+  backoff: () => 60_000,
+  leaseMs: 5 * 60 * 1_000,
+  idempotent: true,
+  priority: 8,
+  requiresNetwork: false,
+  dedupeKey: (input) => `render:${input.renderId}`,
+};
+
+/**
  * Politique du job de rédaction.
  *
  * `maxAttempts: 3` suit docs/05 §4.6 : un fournisseur indisponible mérite trois

@@ -6,16 +6,20 @@ import { Metrics } from './components/Metrics';
 import { ConversationView } from './features/conversation/ConversationView';
 import { EditorialView } from './features/editorial/EditorialView';
 import { ReviewView } from './features/editorial/ReviewView';
+import { VideoView } from './features/video/VideoView';
 import { ProjectsView } from './features/projects/ProjectsView';
 
 /**
- * Application de l'étape 5 : cinq vues, sans routeur (un routeur ne se justifie
- * pas pour cinq onglets, docs/10 §1.3).
+ * Application de l'étape 7 : six vues, sans routeur (un routeur ne se justifie
+ * pas pour six onglets, docs/10 §1.3).
  *
  * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
  *   les cibles et lancer la génération.
  * - **Revue des contenus** (étape 5) : une carte par plateforme — relire, corriger,
  *   approuver ou rejeter, régénérer dans la limite du plafond.
+ * - **Montage vidéo** (étape 7) : importer une vidéo, la transcrire, proposer un
+ *   plan, le modifier, rendre un short vertical sous-titré, le regarder et le
+ *   valider. La publication reste manuelle.
  * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
  *   maître se relit et se valide — c'est elle qui alimente le plan.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
@@ -25,7 +29,7 @@ import { ProjectsView } from './features/projects/ProjectsView';
  * restent réservées aux étapes suivantes.
  */
 
-type View = 'diagnostic' | 'projects' | 'conversation' | 'plan' | 'review';
+type View = 'diagnostic' | 'projects' | 'conversation' | 'plan' | 'review' | 'video';
 
 const CHECK_STYLES: Record<CheckStatus, { icon: string; className: string }> = {
   ok: { icon: '✅', className: 'border-emerald-200 bg-emerald-50' },
@@ -59,14 +63,15 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 5 : le produit écrit, les contrôles relisent, vous validez puis publiez avec un
-          paquet manuel traçable. La planification et la publication par API arrivent ensuite.
+          Étape 7 : les contenus approuvés deviennent des shorts verticaux sous-titrés, qu’on
+          regarde avant de valider. La publication, elle, reste manuelle.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
             [
               ['plan', 'Plan éditorial'],
               ['review', 'Revue des contenus'],
+              ['video', 'Montage vidéo'],
               ['conversation', 'Conversation'],
               ['projects', 'Projets'],
               ['diagnostic', 'Diagnostic'],
@@ -92,6 +97,8 @@ export function App() {
       {view === 'plan' && <EditorialView />}
 
       {view === 'review' && <ReviewView />}
+
+      {view === 'video' && <VideoView />}
 
       {view === 'conversation' && <ConversationView />}
 

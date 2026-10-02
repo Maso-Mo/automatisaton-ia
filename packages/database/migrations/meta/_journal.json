@@ -43,6 +43,13 @@
       "when": 1790960400000,
       "tag": "0005_step_six_voice_transcription",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790964000000,
+      "tag": "0006_step_seven_news_and_render",
+      "breakpoints": true
     }
   ]
 }
