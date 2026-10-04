@@ -50,6 +50,13 @@
       "when": 1790964000000,
       "tag": "0006_step_seven_news_and_render",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790981627687,
+      "tag": "0007_step_eight_publication_budget_analytics",
+      "breakpoints": true
     }
   ]
 }

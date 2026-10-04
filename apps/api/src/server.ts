@@ -36,7 +36,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 7 — rendu vidéo vertical sous-titré',
+    step: 'étape 8 — publication par API et budget',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -104,6 +104,9 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /renders/:renderId/resume',
       'POST /renders/:renderId/validate',
       'GET /renders/:renderId/file',
+      'POST /content/:contentId/publications',
+      'GET /content/:contentId/publications',
+      'POST /publications/:id/decision',
     ],
   }));
 

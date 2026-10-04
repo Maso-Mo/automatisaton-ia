@@ -157,10 +157,49 @@ export const envSchema = z.object({
   // --- Plateformes
   LINKEDIN_CLIENT_ID: optionalText(),
   LINKEDIN_CLIENT_SECRET: optionalText(),
+  /**
+   * Version d'API LinkedIn, au format `AAAAMM` (étape 8).
+   *
+   * **Volontairement sans valeur par défaut** : LinkedIn déprécie ses versions
+   * (la `202510` est annoncée dépréciée au 15 octobre 2026). Écrire une version
+   * en dur serait périmé à une date connue, donc le connecteur refuse de publier
+   * tant qu'elle n'est pas choisie — et retombe en niveau C entre-temps.
+   */
+  LINKEDIN_API_VERSION: optionalText(6),
   REDDIT_CLIENT_ID: optionalText(),
   REDDIT_CLIENT_SECRET: optionalText(),
   TIKTOK_CLIENT_KEY: optionalText(),
   TIKTOK_CLIENT_SECRET: optionalText(),
+
+  // --- Publication par API (étape 8)
+  /**
+   * Nombre de tentatives du job `publish_content` sur une erreur **transitoire**
+   * de plateforme (docs/08 §4.1, règle 3 : « un upload de 500 Mo : 1 seule »).
+   * Deux : une erreur 5xx mérite une reprise, un doublon ne se rattrape pas.
+   */
+  PUBLISH_MAX_ATTEMPTS: integer({ default: 2, min: 1, max: 5, label: 'PUBLISH_MAX_ATTEMPTS' }),
+  /**
+   * Estimation du coût d'une publication, en dollars, comparée au budget restant
+   * **avant** l'appel (docs/08 §8.3). `0` par défaut : publier par API ne coûte
+   * pas de jeton — le frein de budget porte donc sur les plafonds de projet et de
+   * tâche, pas sur un coût inventé.
+   */
+  PUBLISH_ESTIMATED_COST_USD: z.coerce.number().min(0).max(1_000).default(0),
+  /**
+   * **Décision D4** (docs/11 §3.4) : fréquence de collecte des statistiques.
+   *
+   * `24` = option A, **quotidien**. C'est l'option la moins coûteuse, et la règle
+   * des décisions ouvertes de docs/11 §3 s'applique : sans quotas d'API mesurés
+   * sur des plateformes déployées, on retient l'option qui consomme le moins.
+   * Valeur configurable pour que l'option B (toutes les 6 h) reste un réglage, et
+   * non un changement de code.
+   */
+  METRICS_COLLECT_INTERVAL_HOURS: integer({
+    default: 24,
+    min: 1,
+    max: 168,
+    label: 'METRICS_COLLECT_INTERVAL_HOURS',
+  }),
 
   // --- Budget (docs/08 §8.1)
   MONTHLY_BUDGET_USD: z.coerce.number().min(0).max(100_000).default(5),

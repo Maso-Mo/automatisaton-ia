@@ -6,14 +6,22 @@ import {
   createEditorialStore,
   createMediaStore,
   createProjectMemoryStore,
+  createPublishingStore,
   createVideoRenderStore,
   missingTables,
   openDatabase,
   REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
-import { createBudgetPort, type BudgetPort } from '@aia/analytics';
 import {
+  PUBLICATION_TASK,
+  createBudgetPort,
+  evaluateBudgetBrake,
+  loadScopedBudgetLimits,
+  type BudgetPort,
+} from '@aia/analytics';
+import {
+  decryptToken,
   ensureLocalDirectories,
   llmModelFor,
   loadConfig,
@@ -21,7 +29,13 @@ import {
   type Config,
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
-import { createJobRegistry, generateContentSpec, SqliteQueue, type JobRegistry } from '@aia/queue';
+import {
+  PUBLISH_CONTENT_JOB,
+  createJobRegistry,
+  generateContentSpec,
+  SqliteQueue,
+  type JobRegistry,
+} from '@aia/queue';
 import {
   LocalStorageAdapter,
   SpawnFfmpegRunner,
@@ -29,7 +43,15 @@ import {
   type FFmpegRunner,
   type Transcriber,
 } from '@aia/media';
-import { createSystemClock, createSystemRandom, uuidv7, type Clock } from '@aia/shared';
+import {
+  NotFoundError,
+  createSystemClock,
+  createSystemRandom,
+  usdToMicro,
+  uuidv7,
+  type Clock,
+  type PlatformId,
+} from '@aia/shared';
 import {
   PLATFORM_WRITER_AGENT,
   PLATFORM_WRITER_TASK,
@@ -42,8 +64,19 @@ import {
   withRecording,
   type LlmCallRecorder,
 } from '@aia/ai';
-import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
+import { CONTENT_STATE_TRANSITIONS, type EditorialPorts, type ProjectMemoryPorts } from '@aia/core';
+import {
+  createAccountLocks,
+  createApiConnector,
+  resolveConnectorForAccount,
+  resolveCredentials,
+  type PlatformConnector,
+} from '@aia/publishing';
 import { createGenerateContentHandler } from './handlers/generate-content';
+import {
+  createPublishContentHandler,
+  type PublicationContentSource,
+} from './handlers/publish-content';
 import { createRenderVideoHandler } from './handlers/render-video';
 import { createTranscribeMediaHandler } from './handlers/transcribe-media';
 import { createSemaphore } from './features/semaphore';
@@ -130,6 +163,52 @@ function createWriterProviderFactory(options: {
 
     return { provider, lastCallId: () => lastCallId };
   };
+}
+/**
+ * **Le contenu suit la publication** (étape 8). Quand une publication est réglée,
+ * l'état du contenu doit refléter l'issue — mais **seulement** quand la machine à
+ * états l'autorise, et seulement quand **toutes** les cibles sont réglées.
+ *
+ * Deux règles y sont tenues, et ce sont les deux qui évitent les incohérences :
+ *
+ * 1. un contenu multi-plateformes ne passe à `published` que si aucune autre
+ *    publication n'est encore en suspens (`countUnsettledByItem`) — sinon une
+ *    cible publiée et une cible en échec donneraient un état qui ment ;
+ * 2. la transition passe par `publishing` si le contenu n'y est pas encore : le
+ *    domaine n'autorise pas `approved → published` directement, et forcer la
+ *    table ici serait nier la machine à états de `packages/core`.
+ */
+function applyPublicationOutcome(input: {
+  publications: ReturnType<typeof createPublishingStore>;
+  editorial: EditorialPorts;
+  publicationId: string;
+  outcome: string;
+  nowMs: number;
+}): void {
+  const publication = input.publications.getPublication(input.publicationId);
+  if (!publication) return;
+  const item = input.editorial.store.getContentItem(publication.contentItemId);
+  if (!item) return;
+
+  const target =
+    input.outcome === 'published'
+      ? ('published' as const)
+      : input.outcome === 'ambiguous'
+        ? ('publish_ambiguous' as const)
+        : input.outcome === 'failed'
+          ? ('publish_failed' as const)
+          : null;
+  if (!target) return;
+  if (target === 'published' && input.publications.countUnsettledByItem(item.id) > 0) return;
+
+  if (!CONTENT_STATE_TRANSITIONS[item.state].includes(target)) {
+    if (!CONTENT_STATE_TRANSITIONS[item.state].includes('publishing')) return;
+    input.editorial.store.updateContentItem(item.id, { state: 'publishing' });
+  }
+  input.editorial.store.updateContentItem(item.id, {
+    state: target,
+    ...(target === 'published' ? { publishedAt: input.nowMs } : {}),
+  });
 }
 
 export interface WorkerContext {
@@ -348,6 +427,166 @@ export function buildWorker(
     leaseMs: config.env.JOB_LEASE_MS,
     offline: config.env.OFFLINE_MODE,
   });
+
+  /**
+   * Publication par API (étape 8).
+   *
+   * Le handler `publish_content` est le **seul** job qui produit un effet de bord
+   * public. Cette composition lui donne six choses, et rien d'autre :
+   *
+   * - les **publications** et leurs tentatives (`createPublishingStore`) ;
+   * - la **version approuvée gelée** (`PublicationContentSource`) — jamais le
+   *   contenu courant, qui pourrait avoir changé depuis l'approbation ;
+   * - le **choix du connecteur AVANT l'appel** (`resolveConnectorForAccount`) :
+   *   un compte dont les capacités ne permettent pas d'écrire retombe en niveau C
+   *   (paquet manuel), jamais en erreur ;
+   * - le **frein de budget opposable** (`evaluateBudgetBrake`), évalué avant tout
+   *   envoi (docs/11 §2.7) ;
+   * - la **reprogrammation** (`reschedule`) : une publication retenue ou reportée
+   *   est remise en file, jamais détruite ;
+   * - le **retour vers le contenu** (`onSettled`) : l'état du contenu suit l'issue.
+   *
+   * Les jetons LinkedIn sont déchiffrés **au dernier moment**, par compte, sous
+   * verrou (`createAccountLocks`) : deux rafraîchissements concurrents avec un
+   * jeton rotatif révoqueraient le compte (docs/06 §10.2).
+   */
+  const publications = createPublishingStore(handle, () => clock.nowMs());
+
+  const contentSource: PublicationContentSource = {
+    item: (id) => {
+      const item = editorialPorts.store.getContentItem(id);
+      if (!item) return null;
+      return {
+        id: item.id,
+        projectId: item.projectId,
+        platform: item.platform,
+        target: item.target,
+        state: item.state,
+        approvedVersionId: item.approvedVersionId,
+      };
+    },
+    version: (id) => {
+      const version = editorialPorts.store.getVersion(id);
+      if (!version) return null;
+      return {
+        id: version.id,
+        body: version.body,
+        title: version.title,
+        hook: version.hook,
+        hashtags: version.hashtags,
+        mentions: version.mentions,
+        mediaAssetIds: version.mediaAssetIds,
+        approvedAt: version.approvedAt,
+      };
+    },
+  };
+
+  const envBudgetLimits = {
+    dailyUsd: config.env.DAILY_BUDGET_USD,
+    monthlyUsd: config.env.MONTHLY_BUDGET_USD,
+    dailyTokenLimit: config.env.DAILY_TOKEN_LIMIT,
+  };
+
+  const accountLocks = createAccountLocks();
+  const apiConnectors = new Map<PlatformId, PlatformConnector | null>();
+  const apiConnectorFor = (platform: PlatformId): PlatformConnector | null => {
+    const cached = apiConnectors.get(platform);
+    if (cached !== undefined) return cached;
+    const connector = createApiConnector(platform, {
+      apiVersions: { linkedin: config.env.LINKEDIN_API_VERSION },
+      credentialsFor: async (account) => {
+        const record = publications.getAccount(account.platformAccountId);
+        if (!record) {
+          throw new NotFoundError(`Compte plateforme introuvable : ${account.platformAccountId}`, {
+            code: 'PLATFORM_ACCOUNT_NOT_FOUND',
+          });
+        }
+        return accountLocks.run(
+          record.id,
+          async () =>
+            resolveCredentials({
+              account: record,
+              decrypt: (envelope, keyVersion) =>
+                decryptToken(envelope, new Map([[keyVersion, config.encryptionKey]])),
+              nowMs: clock.nowMs(),
+            }).credentials,
+        );
+      },
+      now: () => clock.nowMs(),
+    });
+    apiConnectors.set(platform, connector);
+    return connector;
+  };
+
+  registry.register(
+    createPublishContentHandler({
+      publications,
+      content: contentSource,
+      resolveConnector: ({ platform, accountId }) => {
+        const account = publications.getAccount(accountId);
+        return resolveConnectorForAccount({
+          platform,
+          account: {
+            platformAccountId: accountId,
+            platform,
+            remoteAccountId: account?.remoteAccountId ?? null,
+            label: account?.accountLabel ?? '',
+            scopes: account?.scopes ?? [],
+          },
+          capabilities: (account?.capabilities ?? null) as {
+            level?: string;
+            directPublish?: boolean;
+            draft?: boolean;
+          } | null,
+          connectionState: account?.connectionState,
+          apiConnector: apiConnectorFor(platform),
+        });
+      },
+      budgetBrake: ({ projectId, estimatedMicroUsd }) =>
+        evaluateBudgetBrake({
+          handle,
+          limits: loadScopedBudgetLimits(handle, envBudgetLimits),
+          nowMs: clock.nowMs(),
+          timeZone: budget.timeZone(),
+          projectId,
+          task: PUBLICATION_TASK,
+          estimatedMicroUsd,
+        }),
+      reschedule: async ({ publicationId, delayMs }) => {
+        const publication = publications.getPublication(publicationId);
+        await queue.enqueue(
+          PUBLISH_CONTENT_JOB,
+          { publicationId },
+          {
+            delayMs,
+            ...(publication
+              ? { projectId: publication.projectId, contentItemId: publication.contentItemId }
+              : {}),
+          },
+        );
+      },
+      onSettled: (publicationId, outcome) => {
+        applyPublicationOutcome({
+          publications,
+          editorial: editorialPorts,
+          publicationId,
+          outcome,
+          nowMs: clock.nowMs(),
+        });
+      },
+      onAccountState: ({ accountId, state, error, rateLimitResetAt }) => {
+        publications.setAccountState({
+          accountId,
+          state,
+          error: error ?? null,
+          rateLimitResetAt: rateLimitResetAt ?? null,
+        });
+      },
+      estimatedCostMicroUsd: usdToMicro(config.env.PUBLISH_ESTIMATED_COST_USD),
+      clock,
+      logger,
+    }),
+  );
 
   const loop = createWorkerLoop({
     handle,

@@ -37,6 +37,13 @@
     vérifié → transcription → plan de montage proposé (puis modifiable) → job →
     progression → aperçu → validation, la reprise d'un rendu interrompu, et le
     **schéma seul** de la veille (dont le pipeline arrive à l'étape 10).
+19. **`18-mise-en-oeuvre-etape-8.md`** — publication par API et budget : le
+    handler `publish_content` et ses quatre verrous, la vérification d'une
+    ambiguïté (vérifier, jamais rejouer), le frein de budget qui **retient** au
+    lieu de détruire, les connecteurs A/B/C, l'idempotence à trois niveaux, et les
+    routes `POST /content/:contentId/publications` /
+    `POST /publications/:id/decision`. Le parcours OAuth de bout en bout reste
+    l'incrément suivant (§12).
 
 
 ## Règles de rédaction

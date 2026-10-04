@@ -9,4 +9,5 @@
 
 export * from './budget-guard';
 export * from './budget-port';
+export * from './limits';
 export * from './spend';

@@ -11,6 +11,7 @@
 
 import { getTableName } from 'drizzle-orm';
 
+export * from './analytics';
 export * from './conversation';
 export * from './editorial';
 export * from './media';
@@ -21,6 +22,7 @@ export * from './system';
 export * from './users';
 
 import { appSettings, llmProvidersConfig, users } from './users';
+import { budgetLimits, learnings, metricSnapshots, performancePatterns } from './analytics';
 import {
   audienceProfiles,
   projectFacts,
@@ -161,6 +163,30 @@ export const STEP_SEVEN_TABLE_NAMES: readonly string[] = ['news_sources', 'news_
 
 export const STEP_SEVEN_TABLES = [newsSources, newsItems] as const;
 
+/**
+ * Les **quatre tables de l'étape 8** (docs/10 §4.8) : les plafonds de dépense et
+ * les trois réceptacles des mesures futures (docs/03 §4.4, §6.5, §12.1, §12.2).
+ *
+ * Elles sont listées par **nom SQL**, comme celles de l'étape 4 : trois d'entre
+ * elles n'ont **aucun pipeline** à ce stade — c'est le choix explicite de
+ * docs/10 §1.3 (« une table vide n'est jamais remplie par du code provisoire »),
+ * et c'est précisément quand une table n'a pas encore de code qui la lit qu'elle
+ * peut disparaître d'une migration sans que personne ne le voie.
+ */
+export const STEP_EIGHT_TABLE_NAMES: readonly string[] = [
+  'budget_limits',
+  'learnings',
+  'metric_snapshots',
+  'performance_patterns',
+];
+
+export const STEP_EIGHT_TABLES = [
+  budgetLimits,
+  learnings,
+  metricSnapshots,
+  performancePatterns,
+] as const;
+
 /** Les deux tables éditoriales de l'étape 3, avec les autres : elles vivent dans `./editorial`. */
 export const STEP_THREE_EDITORIAL_TABLES = [contentSubjects, subjectAngles] as const;
 
@@ -182,4 +208,5 @@ export const REQUIRED_TABLE_NAMES: readonly string[] = [
   ...STEP_FIVE_TABLE_NAMES,
   ...STEP_SIX_TABLE_NAMES,
   ...STEP_SEVEN_TABLE_NAMES,
+  ...STEP_EIGHT_TABLE_NAMES,
 ];

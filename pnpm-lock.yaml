@@ -28,6 +28,9 @@ importers:
       '@aia/observability':
         specifier: workspace:*
         version: link:packages/observability
+      '@aia/publishing':
+        specifier: workspace:*
+        version: link:packages/publishing
       '@aia/queue':
         specifier: workspace:*
         version: link:packages/queue
@@ -173,6 +176,9 @@ importers:
       '@aia/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@aia/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@aia/queue':
         specifier: workspace:*
         version: link:../../packages/queue

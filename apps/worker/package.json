@@ -15,6 +15,7 @@
     "@aia/database": "workspace:*",
     "@aia/media": "workspace:*",
     "@aia/observability": "workspace:*",
+    "@aia/publishing": "workspace:*",
     "@aia/queue": "workspace:*",
     "@aia/shared": "workspace:*",
     "zod": "^4.6.2"

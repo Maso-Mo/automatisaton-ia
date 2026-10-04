@@ -37,12 +37,14 @@ describe('API : racine, diagnostic, jobs et flux SSE', () => {
     // Le libellé d'étape est une **affirmation produit** : il nomme ce que
     // l'application sait faire aujourd'hui. Ce test le fige pour qu'il ne
     // régresse pas et n'annonce jamais une étape inexistante.
-    expect(body.step).toBe('étape 7 — rendu vidéo vertical sous-titré');
+    expect(body.step).toBe('étape 8 — publication par API et budget');
     expect(body.endpoints).toContain('GET /system/health');
     // L'étape 4 ajoute le plan éditorial et la génération de contenus, l'étape 5
-    // les routes de revue, l'étape 6 l'entrée vocale, l'étape 7 le montage vidéo :
-    // la racine les annonce, donc l'écran sait où aller sans deviner une URL.
+    // les routes de revue, l'étape 6 l'entrée vocale, l'étape 7 le montage vidéo,
+    // l'étape 8 le déclenchement de publication : la racine les annonce, donc
+    // l'écran sait où aller sans deviner une URL.
     expect(body.endpoints).toContain('POST /projects/:id/plan');
+    expect(body.endpoints).toContain('POST /content/:contentId/publications');
     expect(body.endpoints).toContain('POST /projects/:id/content');
     expect(body.endpoints).toContain('GET /editorial/vocabulary');
     expect(body.endpoints).toContain('POST /content/:contentId/approve');

@@ -8,6 +8,7 @@ import {
   STEP_FIVE_TABLE_NAMES,
   STEP_SEVEN_TABLE_NAMES,
   STEP_SIX_TABLE_NAMES,
+  STEP_EIGHT_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -47,6 +48,10 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       ...STEP_FIVE_TABLE_NAMES,
       ...STEP_SIX_TABLE_NAMES,
       ...STEP_SEVEN_TABLE_NAMES,
+      // Étape 8 : les plafonds de dépense et les trois réceptacles des mesures
+      // futures (docs/10 §4.8). Trois d'entre elles n'ont pas encore de pipeline —
+      // c'est justement pour ça qu'elles sont citées ici.
+      ...STEP_EIGHT_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',

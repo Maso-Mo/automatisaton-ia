@@ -36,6 +36,7 @@ import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } f
 import {
   createJobRegistry,
   generateContentSpec,
+  publishContentSpec,
   renderVideoSpec,
   transcribeMediaSpec,
   SqliteQueue,
@@ -311,6 +312,9 @@ export function buildApi(
     // Étape 7 : l'API écrit des rendus, elle ne les exécute pas. Enregistrer la
     // **spécification** suffit donc — le handler vit dans le worker.
     registry.registerSpec(renderVideoSpec);
+    // Étape 8 : la publication par API est, elle aussi, un job du worker ; l'API
+    // ne fait que le mettre en file (docs/02 §3).
+    registry.registerSpec(publishContentSpec);
     return new SqliteQueue({
       db: handle,
       registry,

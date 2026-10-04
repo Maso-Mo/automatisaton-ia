@@ -131,3 +131,39 @@ export const generateContentSpec: JobSpec<GenerateContentInput> = {
       ? `content:${input.mode}:${input.contentItemId}`
       : `content:${input.angleId}:${input.mode}:${[...input.targets].sort().join(',')}`,
 };
+
+/**
+ * Le job de **publication par API** (étape 8, docs/05 §8.2, docs/10 §4.8).
+ *
+ * L'entrée ne porte **que** l'identifiant de la publication — comme
+ * `render_video` ne porte que celui du rendu. C'est ce qui rend la reprise
+ * possible sans recréer de données métier, et surtout **sans rejouer un envoi** :
+ * le handler relit l'état de la ligne avant toute action distante, ce qui est
+ * exactement ce que demande le critère de sortie « aucun doublon après 20 tests
+ * de reprise forcée ».
+ *
+ * Politique : `idempotent: true` (une réexécution ne repose pas la question à la
+ * plateforme), `requiresNetwork: true` (le mode hors ligne ne tente pas de
+ * publier), `maxAttempts: 2` (une erreur 5xx mérite une reprise, un doublon ne se
+ * rattrape pas — docs/08 §4.1 règle 3), et une clé de déduplication par
+ * publication : deux clics sur « publier » ne produisent pas deux appels.
+ */
+export const PUBLISH_CONTENT_JOB = 'publish_content';
+
+export const publishContentInputSchema = z.object({
+  publicationId: z.string().min(1),
+});
+
+export type PublishContentInput = z.infer<typeof publishContentInputSchema>;
+
+export const publishContentSpec: JobSpec<PublishContentInput> = {
+  type: PUBLISH_CONTENT_JOB,
+  inputSchema: publishContentInputSchema,
+  maxAttempts: 2,
+  backoff: (attempt) => 60_000 * 4 ** (Math.max(1, attempt) - 1),
+  leaseMs: 5 * 60_000,
+  idempotent: true,
+  priority: 3,
+  requiresNetwork: true,
+  dedupeKey: (input) => `publish:${input.publicationId}`,
+};
