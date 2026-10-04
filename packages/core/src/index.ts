@@ -16,4 +16,5 @@ export * from './conversation';
 export * from './editorial';
 export * from './errors';
 export * from './projects';
+export * from './scheduling';
 export * from './system/health';

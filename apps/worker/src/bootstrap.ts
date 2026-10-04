@@ -7,6 +7,7 @@ import {
   createMediaStore,
   createProjectMemoryStore,
   createPublishingStore,
+  createSchedulingStore,
   createVideoRenderStore,
   missingTables,
   openDatabase,
@@ -64,7 +65,12 @@ import {
   withRecording,
   type LlmCallRecorder,
 } from '@aia/ai';
-import { CONTENT_STATE_TRANSITIONS, type EditorialPorts, type ProjectMemoryPorts } from '@aia/core';
+import {
+  CALENDAR_LATE_TOLERANCE_MS,
+  CONTENT_STATE_TRANSITIONS,
+  type EditorialPorts,
+  type ProjectMemoryPorts,
+} from '@aia/core';
 import {
   createAccountLocks,
   createApiConnector,
@@ -451,6 +457,7 @@ export function buildWorker(
    * jeton rotatif révoqueraient le compte (docs/06 §10.2).
    */
   const publications = createPublishingStore(handle, () => clock.nowMs());
+  const scheduling = createSchedulingStore(handle, () => clock.nowMs());
 
   const contentSource: PublicationContentSource = {
     item: (id) => {
@@ -554,16 +561,31 @@ export function buildWorker(
         }),
       reschedule: async ({ publicationId, delayMs }) => {
         const publication = publications.getPublication(publicationId);
-        await queue.enqueue(
+        const scheduledFor = clock.nowMs() + delayMs;
+        publications.settlePublication(publicationId, {
+          status: 'planned',
+          scheduledFor,
+        });
+        const jobId = await queue.enqueue(
           PUBLISH_CONTENT_JOB,
           { publicationId },
           {
             delayMs,
+            dedupeKey: `publish:${publicationId}:retry:${scheduledFor}`,
             ...(publication
               ? { projectId: publication.projectId, contentItemId: publication.contentItemId }
               : {}),
           },
         );
+        scheduling.rescheduleByPublication(
+          publicationId,
+          scheduledFor,
+          'Publication reprogrammée par le pipeline.',
+          jobId,
+        );
+      },
+      onPublishing: (publicationId) => {
+        scheduling.setStatusByPublication(publicationId, 'publishing');
       },
       onSettled: (publicationId, outcome) => {
         applyPublicationOutcome({
@@ -573,6 +595,16 @@ export function buildWorker(
           outcome,
           nowMs: clock.nowMs(),
         });
+        scheduling.setStatusByPublication(
+          publicationId,
+          outcome === 'published'
+            ? 'published'
+            : outcome === 'manual_required'
+              ? 'manual_required'
+              : outcome === 'ambiguous'
+                ? 'failed'
+                : 'failed',
+        );
       },
       onAccountState: ({ accountId, state, error, rateLimitResetAt }) => {
         publications.setAccountState({
@@ -599,6 +631,7 @@ export function buildWorker(
     heartbeatMs: config.env.JOB_HEARTBEAT_MS,
     batchSize: config.env.QUEUE_CONCURRENCY,
     offline: config.env.OFFLINE_MODE,
+    promoteCalendar: (nowMs) => scheduling.promoteDue(nowMs, CALENDAR_LATE_TOLERANCE_MS),
   });
 
   const shutdown = async (): Promise<void> => {

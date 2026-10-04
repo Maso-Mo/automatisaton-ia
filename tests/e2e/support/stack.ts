@@ -14,15 +14,27 @@ import {
   createEditorialStore,
   createMediaStore,
   createProjectMemoryStore,
+  createPublishingStore,
+  createSchedulingStore,
   missingTables,
   openDatabase,
   REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
 import { LocalStorageAdapter, ScriptedFfmpegRunner, ScriptedTranscriber } from '@aia/media';
-import type { EditorialPorts, ProjectMemoryPorts } from '@aia/core';
+import {
+  CALENDAR_LATE_TOLERANCE_MS,
+  type EditorialPorts,
+  type ProjectMemoryPorts,
+} from '@aia/core';
 import { createLogger, type AppLogger } from '@aia/observability';
-import { createJobRegistry, generateContentSpec, SqliteQueue } from '@aia/queue';
+import {
+  PUBLISH_CONTENT_JOB,
+  createJobRegistry,
+  generateContentSpec,
+  SqliteQueue,
+} from '@aia/queue';
+import { createSimulatedConnector } from '@aia/publishing';
 import {
   createSystemClock,
   createSystemRandom,
@@ -33,6 +45,7 @@ import {
 import { buildServer } from '../../../apps/api/src/server';
 import { buildApi } from '../../../apps/api/src/bootstrap';
 import { createGenerateContentHandler } from '../../../apps/worker/src/handlers/generate-content';
+import { createPublishContentHandler } from '../../../apps/worker/src/handlers/publish-content';
 import { createRenderVideoHandler } from '../../../apps/worker/src/handlers/render-video';
 import { createTranscribeMediaHandler } from '../../../apps/worker/src/handlers/transcribe-media';
 import { createSemaphore } from '../../../apps/worker/src/features/semaphore';
@@ -329,6 +342,86 @@ const queue = new SqliteQueue({
   offline: false,
 });
 
+/** Publication calendrier : vrai handler, connecteur scripté, aucun réseau. */
+const publications = createPublishingStore(handle, () => clock.nowMs());
+const scheduling = createSchedulingStore(handle, () => clock.nowMs());
+const simulatedPublishing = createSimulatedConnector({ platform: 'linkedin', level: 'A' });
+registry.register(
+  createPublishContentHandler({
+    publications,
+    content: {
+      item: (id) => {
+        const item = ports.store.getContentItem(id);
+        return item
+          ? {
+              id: item.id,
+              projectId: item.projectId,
+              platform: item.platform,
+              target: item.target,
+              state: item.state,
+              approvedVersionId: item.approvedVersionId,
+            }
+          : null;
+      },
+      version: (id) => {
+        const version = ports.store.getVersion(id);
+        return version
+          ? {
+              id: version.id,
+              body: version.body,
+              title: version.title,
+              hook: version.hook,
+              hashtags: version.hashtags,
+              mentions: version.mentions,
+              mediaAssetIds: version.mediaAssetIds,
+              approvedAt: version.approvedAt,
+            }
+          : null;
+      },
+    },
+    resolveConnector: () => ({
+      level: 'A',
+      connector: simulatedPublishing,
+      reason: 'Connecteur scripté E2E.',
+    }),
+    budgetBrake: () => ({ held: false, allowed: true, evaluated: 0 }),
+    reschedule: async ({ publicationId, delayMs }) => {
+      const scheduledFor = clock.nowMs() + delayMs;
+      const jobId = await queue.enqueue(
+        PUBLISH_CONTENT_JOB,
+        { publicationId },
+        { delayMs, dedupeKey: `publish:${publicationId}:retry:${scheduledFor}` },
+      );
+      scheduling.rescheduleByPublication(
+        publicationId,
+        scheduledFor,
+        'Reprogrammée en E2E.',
+        jobId,
+      );
+    },
+    onPublishing: (publicationId) => {
+      scheduling.setStatusByPublication(publicationId, 'publishing');
+    },
+    onSettled: (publicationId, outcome) => {
+      scheduling.setStatusByPublication(
+        publicationId,
+        outcome === 'published' ? 'published' : 'failed',
+      );
+    },
+    onAccountState: ({ accountId, state, error, rateLimitResetAt }) => {
+      publications.setAccountState({
+        accountId,
+        state,
+        error: error ?? null,
+        rateLimitResetAt: rateLimitResetAt ?? null,
+      });
+    },
+    estimatedCostMicroUsd: 0,
+    clock,
+    logger,
+  }),
+);
+
 const loop = createWorkerLoop({
   handle,
   queue,
@@ -340,6 +433,7 @@ const loop = createWorkerLoop({
   heartbeatMs: config.env.JOB_HEARTBEAT_MS,
   batchSize: 2,
   offline: false,
+  promoteCalendar: (nowMs) => scheduling.promoteDue(nowMs, CALENDAR_LATE_TOLERANCE_MS),
 });
 
 loop.start();

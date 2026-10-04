@@ -241,6 +241,7 @@ export interface ContentItemPatch {
   editRatio?: number | null;
   regeneratedCount?: number;
   approvedAt?: number | null;
+  scheduledFor?: number | null;
   publishedAt?: number | null;
   archivedAt?: number | null;
 }

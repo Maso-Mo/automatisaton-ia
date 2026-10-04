@@ -8,10 +8,12 @@ import { EditorialView } from './features/editorial/EditorialView';
 import { ReviewView } from './features/editorial/ReviewView';
 import { VideoView } from './features/video/VideoView';
 import { ProjectsView } from './features/projects/ProjectsView';
+import { CalendarView } from './features/calendar/CalendarView';
+import { DashboardView } from './features/calendar/DashboardView';
 
 /**
- * Application de l'étape 7 : six vues, sans routeur (un routeur ne se justifie
- * pas pour six onglets, docs/10 §1.3).
+ * Application de l'étape 9 : huit vues, sans routeur (un routeur ne se justifie
+ * pas encore pour cette navigation compacte, docs/10 §1.3).
  *
  * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
  *   les cibles et lancer la génération.
@@ -19,17 +21,26 @@ import { ProjectsView } from './features/projects/ProjectsView';
  *   approuver ou rejeter, régénérer dans la limite du plafond.
  * - **Montage vidéo** (étape 7) : importer une vidéo, la transcrire, proposer un
  *   plan, le modifier, rendre un short vertical sous-titré, le regarder et le
- *   valider. La publication reste manuelle.
+ *   valider.
+ * - **Aujourd’hui / Calendrier** (étape 9) : surveiller les échéances et organiser
+ *   des publications futures dans le fuseau choisi.
  * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
  *   maître se relit et se valide — c'est elle qui alimente le plan.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
  * - **Diagnostic** (étape 1) : *le socle est-il en état ?*
  *
- * La publication manuelle niveau C existe ; planification et publication par API
- * restent réservées aux étapes suivantes.
+ * Le calendrier réutilise le pipeline de publication idempotent de l'étape 8.
  */
 
-type View = 'diagnostic' | 'projects' | 'conversation' | 'plan' | 'review' | 'video';
+type View =
+  | 'dashboard'
+  | 'calendar'
+  | 'diagnostic'
+  | 'projects'
+  | 'conversation'
+  | 'plan'
+  | 'review'
+  | 'video';
 
 const CHECK_STYLES: Record<CheckStatus, { icon: string; className: string }> = {
   ok: { icon: '✅', className: 'border-emerald-200 bg-emerald-50' },
@@ -50,7 +61,7 @@ const GLOBAL_LABELS: Record<SystemHealth['status'], string> = {
 };
 
 export function App() {
-  const [view, setView] = useState<View>('plan');
+  const [view, setView] = useState<View>('dashboard');
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 5_000 });
   const summary = useQuery({
     queryKey: ['jobs-summary'],
@@ -59,16 +70,18 @@ export function App() {
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 7 : les contenus approuvés deviennent des shorts verticaux sous-titrés, qu’on
-          regarde avant de valider. La publication, elle, reste manuelle.
+          Étape 9 : préparez la semaine, choisissez l’heure locale et suivez chaque publication sans
+          perdre l’idempotence du pipeline.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
             [
+              ['dashboard', 'Aujourd’hui'],
+              ['calendar', 'Calendrier'],
               ['plan', 'Plan éditorial'],
               ['review', 'Revue des contenus'],
               ['video', 'Montage vidéo'],
@@ -95,6 +108,10 @@ export function App() {
       </header>
 
       {view === 'plan' && <EditorialView />}
+
+      {view === 'dashboard' && <DashboardView onOpenCalendar={() => setView('calendar')} />}
+
+      {view === 'calendar' && <CalendarView />}
 
       {view === 'review' && <ReviewView />}
 

@@ -9,6 +9,7 @@ import {
   STEP_SEVEN_TABLE_NAMES,
   STEP_SIX_TABLE_NAMES,
   STEP_EIGHT_TABLE_NAMES,
+  STEP_NINE_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -52,6 +53,9 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       // futures (docs/10 §4.8). Trois d'entre elles n'ont pas encore de pipeline —
       // c'est justement pour ça qu'elles sont citées ici.
       ...STEP_EIGHT_TABLE_NAMES,
+      // Étape 9 : intention calendrier et propositions, séparées de l'état
+      // distant (`publications`) et de l'exécution (`jobs`).
+      ...STEP_NINE_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
@@ -91,6 +95,7 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
     // Le pipeline arrive à l'étape 10 ; ce qui est vérifié ici, c'est que le modèle
     // de données existe vraiment — c'est le seul écart assumé du plan (docs/10 §4.7).
     expect(STEP_SEVEN_TABLE_NAMES).toEqual(['news_sources', 'news_items']);
+    expect(STEP_NINE_TABLE_NAMES).toEqual(['calendar_slots', 'calendar_change_proposals']);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });
 

@@ -9,6 +9,7 @@ import { registerEditorialRoutes } from './routes/editorial';
 import { registerPublishingRoutes } from './routes/publishing';
 import { registerMediaRoutes } from './routes/media';
 import { registerVideoRoutes } from './routes/videos';
+import { registerCalendarRoutes } from './routes/calendar';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -36,7 +37,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 8 — publication par API et budget',
+    step: 'étape 9 — calendrier éditorial et planification',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -107,6 +108,12 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /content/:contentId/publications',
       'GET /content/:contentId/publications',
       'POST /publications/:id/decision',
+      'GET /calendar',
+      'POST /calendar/slots',
+      'PATCH /calendar/slots/:id',
+      'POST /calendar/slots/:id/cancel',
+      'POST /calendar/slots/:id/publish-now',
+      'GET /events/calendar',
     ],
   }));
 
@@ -118,6 +125,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerVideoRoutes(app, context);
   registerEditorialRoutes(app, context);
   registerPublishingRoutes(app, context);
+  registerCalendarRoutes(app, context);
 
   return app;
 }

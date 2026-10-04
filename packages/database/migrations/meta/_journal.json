@@ -57,6 +57,13 @@
       "when": 1790981627687,
       "tag": "0007_step_eight_publication_budget_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791073059498,
+      "tag": "0008_foamy_chameleon",
+      "breakpoints": true
     }
   ]
 }

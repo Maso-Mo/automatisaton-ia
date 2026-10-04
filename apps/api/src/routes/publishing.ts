@@ -304,11 +304,14 @@ export function registerPublishingRoutes(app: FastifyInstance, context: ApiConte
         decisionNote: note ?? 'Marquée publiée après vérification humaine.',
         publishedAt: context.clock.nowMs(),
       });
+      context.scheduling.setStatusByPublication(id, 'published');
       return { publication: settled };
     }
     if (body.decision === 'retry') {
+      const retryAt = context.clock.nowMs();
       const settled = context.publishing.settlePublication(id, {
         status: 'planned',
+        scheduledFor: null,
         needsHumanDecision: false,
         decisionNote: note ?? 'Reprise décidée après vérification humaine.',
       });
@@ -317,6 +320,13 @@ export function registerPublishingRoutes(app: FastifyInstance, context: ApiConte
         { publicationId: id },
         { projectId: publication.projectId, contentItemId: publication.contentItemId },
       );
+      context.scheduling.rescheduleByPublication(
+        id,
+        retryAt,
+        'Reprise décidée après vérification humaine.',
+        jobId,
+      );
+      context.scheduling.setStatusByPublication(id, 'due');
       return { publication: settled, jobId };
     }
     const settled = context.publishing.settlePublication(id, {
@@ -324,6 +334,7 @@ export function registerPublishingRoutes(app: FastifyInstance, context: ApiConte
       needsHumanDecision: false,
       decisionNote: note ?? 'Publication abandonnée après vérification humaine.',
     });
+    context.scheduling.setStatusByPublication(id, 'cancelled');
     return { publication: settled };
   });
 }

@@ -72,7 +72,7 @@ interface ContentBundle {
     approvedVersionId: string | null;
     regeneratedCount: number;
   };
-  version: { body: string; generation: string | null };
+  version: { id: string; body: string; generation: string | null };
 }
 
 interface ContentDetail {
@@ -334,6 +334,98 @@ test.describe('parcours 1 — de l’entretien à la publication manuelle', () =
       await manual.getByRole('button', { name: 'J’ai publié' }).click();
       await expect(linkedin).toContainText('Publié');
       expect(Date.now() - startedAt).toBeLessThan(60_000);
+    });
+
+    await test.step('le calendrier planifie, déplace et publie maintenant sans doublon', async () => {
+      const projectId = await projectIdByName(request, PROJECT.name);
+      const bundles = await contentBundles(request, projectId);
+      const linkedin = bundles.find((bundle) => bundle.item.target === 'linkedin_post');
+      expect(linkedin?.item.approvedVersionId).toBeTruthy();
+
+      // Un second compte permet de vérifier une publication API sans modifier
+      // l'historique niveau C que le parcours vient de produire.
+      await openView(page, 'Revue des contenus');
+      await page.getByLabel('Plateforme du compte').selectOption('linkedin');
+      await page.getByLabel('Libellé du compte').fill('LinkedIn calendrier');
+      await page.getByRole('button', { name: 'Ajouter le compte' }).click();
+      await expect(page.getByText('LinkedIn personnel · LinkedIn calendrier')).toBeVisible();
+
+      await openView(page, 'Calendrier');
+      await page
+        .getByRole('combobox', { name: 'Projet', exact: true })
+        .selectOption({ value: projectId });
+      await page
+        .getByLabel('Contenu approuvé')
+        .selectOption(linkedin?.item.approvedVersionId ?? '');
+      await page
+        .getByLabel('Plateforme / compte')
+        .selectOption({ label: 'LinkedIn · LinkedIn calendrier' });
+
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+      const tomorrowKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+      await page.getByLabel('Date', { exact: true }).fill(tomorrowKey);
+      await page.getByLabel('Heure', { exact: true }).fill('10:00');
+      await page.getByRole('combobox', { name: 'Rigidité' }).selectOption('FLEXIBLE');
+      await page.getByRole('button', { name: 'Confirmer le créneau' }).click();
+      await expect(page.getByText('Créneau enregistré.')).toBeVisible();
+
+      // La semaine est un horizon glissant de sept jours : demain doit y être
+      // visible même si le test s'exécute un dimanche.
+      await expect(page.locator('article[data-calendar-slot]')).toHaveCount(1);
+      await page.getByRole('button', { name: 'Demain' }).click();
+      const slot = page.locator('article[data-calendar-slot]');
+      await expect(slot).toHaveCount(1);
+      await expect(slot).toContainText('10:00');
+      await expect(slot).toContainText('FLEXIBLE');
+
+      await slot.getByRole('button', { name: 'Modifier / déplacer' }).click();
+      await slot.getByLabel('Heure').fill('11:00');
+      await slot.getByRole('button', { name: 'Enregistrer le déplacement' }).click();
+      await expect(slot).toContainText('11:00');
+
+      // Validation responsive réelle : les actions restent tactiles et aucune
+      // largeur 360/390 px ne produit de débordement horizontal.
+      for (const width of [360, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        await expect(slot.getByRole('button', { name: 'Publier maintenant' })).toBeVisible();
+        const sizes = await page.evaluate(() => ({
+          scroll: document.documentElement.scrollWidth,
+          client: document.documentElement.clientWidth,
+        }));
+        expect(sizes.scroll).toBeLessThanOrEqual(sizes.client);
+      }
+      await page.setViewportSize({ width: 1280, height: 800 });
+
+      await slot.getByRole('button', { name: 'Publier maintenant' }).click();
+      // Le créneau prend l'heure courante : il quitte logiquement « Demain »
+      // et se retrouve dans « Aujourd'hui » pendant l'exécution.
+      await page
+        .getByRole('group', { name: 'Période du calendrier' })
+        .getByRole('button', { name: 'Aujourd’hui' })
+        .click();
+      const publishedSlot = page.locator('article[data-calendar-slot]');
+      await expect(publishedSlot).toContainText('published');
+
+      const publications = await request.get(
+        `/api/content/${linkedin?.item.id ?? ''}/publications`,
+      );
+      const publicationBody = (await publications.json()) as {
+        publications: Array<{ platformAccountId: string; status: string; attempts: unknown[] }>;
+      };
+      const calendarPublication = publicationBody.publications.find(
+        (publication) => publication.status === 'published' && publication.attempts.length === 1,
+      );
+      expect(calendarPublication).toBeDefined();
+
+      const jobs = await request.get('/api/jobs?limit=50');
+      const publishJobs = (
+        (await jobs.json()) as { jobs: Array<{ type: string; status: string }> }
+      ).jobs.filter((job) => job.type === 'publish_content');
+      expect(publishJobs).toHaveLength(1);
+      expect(publishJobs[0]?.status).toBe('completed');
+
+      await openView(page, 'Revue des contenus');
+      await selectByLabel(page, 'Projet de la revue', PROJECT.name);
     });
 
     await test.step('la correction manuelle crée une version, elle n’écrase rien', async () => {

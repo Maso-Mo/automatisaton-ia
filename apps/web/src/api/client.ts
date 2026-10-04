@@ -723,6 +723,66 @@ export interface VideoRenderView {
   finishedAt: number | null;
 }
 
+// --- Calendrier éditorial (étape 9) ---------------------------------------
+
+export type CalendarRigidityView = 'LOCKED' | 'FLEXIBLE' | 'EVERGREEN';
+
+export interface CalendarSlotView {
+  id: string;
+  projectId: string;
+  contentItemId: string;
+  contentVersionId: string;
+  platformAccountId: string;
+  platform: string;
+  scheduledFor: number;
+  timezone: string;
+  rigidity: CalendarRigidityView;
+  status: string;
+  publicationId: string | null;
+  jobId: string | null;
+  missedReason: string | null;
+  cancelledAt: number | null;
+  local: { localDate: string; localTime: string; timeZone: string; epochMs: number };
+  content: { id: string; title: string; body: string; state: string };
+  project: { id: string; name: string };
+  account: { id: string; label: string };
+  publication: {
+    id: string;
+    status: string;
+    remoteUrl: string | null;
+    decisionNote: string | null;
+  } | null;
+  conflicts?: Array<{ kind: string; slotId: string; message: string }>;
+}
+
+export interface CalendarProposalView {
+  id: string;
+  calendarSlotId: string;
+  proposedScheduledFor: number | null;
+  proposedTimezone: string | null;
+  proposedRigidity: CalendarRigidityView | null;
+  reason: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  proposedAt: number;
+  resolvedAt: number | null;
+}
+
+export interface CalendarSettingsView {
+  timezone: string;
+  cadencePerDay: Record<string, number>;
+  conflictWindowMinutes?: number;
+}
+
+export interface CalendarSummaryView {
+  timezone: string;
+  today: number;
+  next: CalendarSlotView | null;
+  missed: number;
+  conflicts: number;
+  contentToValidate: number;
+  approvedUnscheduled: number;
+}
+
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
@@ -1026,6 +1086,57 @@ export const api = {
    */
   renderFileUrl: (renderId: string) => `/api/renders/${encodeURIComponent(renderId)}/file`,
   sourceFileUrl: (assetId: string) => `/api/media/assets/${encodeURIComponent(assetId)}/file`,
+
+  // --- Calendrier éditorial (étape 9) -----------------------------------
+  calendarSettings: () => getJson<CalendarSettingsView>('/calendar/settings'),
+  updateCalendarSettings: (body: { timezone?: string; cadencePerDay?: Record<string, number> }) =>
+    patchJson<CalendarSettingsView>('/calendar/settings', body),
+  calendar: (view: 'today' | 'tomorrow' | 'week', projectId?: string) =>
+    getJson<{ timezone: string; from: number; to: number; slots: CalendarSlotView[] }>(
+      `/calendar${queryString({ view, projectId })}`,
+    ),
+  calendarSummary: () => getJson<CalendarSummaryView>('/calendar/summary'),
+  createCalendarSlot: (body: {
+    contentVersionId: string;
+    platformAccountId: string;
+    localDate: string;
+    localTime: string;
+    timezone: string;
+    rigidity: CalendarRigidityView;
+  }) =>
+    postJson<{
+      slot: CalendarSlotView;
+      warnings: { conflicts: Array<{ message: string }>; cadence: string[] };
+    }>('/calendar/slots', body),
+  updateCalendarSlot: (
+    id: string,
+    body: {
+      localDate?: string;
+      localTime?: string;
+      timezone?: string;
+      rigidity?: CalendarRigidityView;
+    },
+  ) =>
+    patchJson<{
+      slot: CalendarSlotView;
+      warnings: { conflicts: Array<{ message: string }>; cadence: string[] };
+    }>(`/calendar/slots/${encodeURIComponent(id)}`, body),
+  cancelCalendarSlot: (id: string, reason?: string) =>
+    postJson<{ slot: CalendarSlotView }>(`/calendar/slots/${encodeURIComponent(id)}/cancel`, {
+      reason,
+    }),
+  publishCalendarSlotNow: (id: string) =>
+    postJson<{ slot: CalendarSlotView; jobId: string | null }>(
+      `/calendar/slots/${encodeURIComponent(id)}/publish-now`,
+      {},
+    ),
+  calendarProposals: (slotId?: string) =>
+    getJson<{ proposals: CalendarProposalView[] }>(`/calendar/proposals${queryString({ slotId })}`),
+  decideCalendarProposal: (id: string, decision: 'accepted' | 'rejected') =>
+    postJson<{ proposal: CalendarProposalView; slot: CalendarSlotView }>(
+      `/calendar/proposals/${encodeURIComponent(id)}/decision`,
+      { decision },
+    ),
 };
 
 export function formatUsd(microUsd: number): string {

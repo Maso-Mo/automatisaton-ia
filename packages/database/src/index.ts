@@ -18,6 +18,7 @@ export * from './repositories/media';
 export * from './repositories/news';
 export * from './repositories/project-memory';
 export * from './repositories/publishing';
+export * from './repositories/scheduling';
 export * from './repositories/prompt-versions';
 export * from './repositories/renders';
 export * from './repositories/settings';

@@ -256,7 +256,7 @@ describe('API éditoriale et génération de contenus (docs/10 §4.3, docs/05 §
       step: string;
       endpoints: string[];
     };
-    expect(body.step).toContain('étape 8');
+    expect(body.step).toContain('étape 9');
     expect(body.endpoints).toContain('POST /projects/:id/plan');
     expect(body.endpoints).toContain('POST /projects/:id/content');
     expect(body.endpoints).toContain('POST /content/:contentId/regenerate');

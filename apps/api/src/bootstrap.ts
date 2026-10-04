@@ -7,6 +7,7 @@ import {
   createMediaStore,
   createProjectMemoryStore,
   createPublishingStore,
+  createSchedulingStore,
   createVideoRenderStore,
   getJob,
   isWalEnabled,
@@ -94,6 +95,7 @@ export interface ApiContext {
   /** Orchestration éditoriale : plan (synchrone) et mise en file des rédactions. */
   editorial: EditorialFeatureDeps;
   publishing: ReturnType<typeof createPublishingStore>;
+  scheduling: ReturnType<typeof createSchedulingStore>;
   media: ReturnType<typeof createMediaStore>;
   /**
    * Étape 7 : import des vidéos, proposition du plan, suivi du rendu. Le rendu
@@ -342,6 +344,7 @@ export function buildApi(
     logger,
   };
   const publishing = createPublishingStore(handle, () => clock.nowMs());
+  const scheduling = createSchedulingStore(handle, () => clock.nowMs());
   const media = createMediaStore(handle, () => clock.nowMs());
   const renders = createVideoRenderStore(handle, () => clock.nowMs());
   const mediaStorage = new LocalStorageAdapter(config.paths.mediaRoot);
@@ -400,6 +403,7 @@ export function buildApi(
     conversationFeature,
     editorial,
     publishing,
+    scheduling,
     media,
     video,
     renders,

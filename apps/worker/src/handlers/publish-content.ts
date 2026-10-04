@@ -86,6 +86,8 @@ export interface PublishContentHandlerDeps {
   reschedule(input: { publicationId: string; delayMs: number; reason: string }): Promise<void>;
   /** Prévient le domaine qu'une publication est réglée (état du contenu, étape 8). */
   onSettled(publicationId: string, outcome: string): void;
+  /** Le verrou a été acquis : le calendrier peut afficher `publishing`. */
+  onPublishing?(publicationId: string): void;
   /** Marque le compte en `rate_limited` ou `expired` selon la réponse. */
   onAccountState(input: {
     accountId: string;
@@ -412,6 +414,7 @@ export function createPublishContentHandler(
         const reason = `Publication non réservable dans son état « ${current?.status ?? 'inconnu'} ».`;
         return { publicationId: publication.id, outcome: 'skipped', level: 'C', reason };
       }
+      deps.onPublishing?.(publication.id);
 
       const request = buildPublishRequest(deps, publication);
       const resolved = deps.resolveConnector({

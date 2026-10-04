@@ -30,6 +30,8 @@ export interface WorkerLoopOptions {
   heartbeatMs: number;
   batchSize: number;
   offline: boolean;
+  /** Promotion métier des créneaux, exécutée avant la réservation des jobs. */
+  promoteCalendar?: (nowMs: number) => { due: string[]; missed: string[] };
   /** Délai maximal accordé au job courant avant libération du lease (docs/08 §2.4). */
   shutdownGraceMs?: number;
 }
@@ -57,6 +59,7 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
     heartbeatMs,
     batchSize,
     offline,
+    promoteCalendar,
   } = options;
   const shutdownGraceMs = options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS;
 
@@ -103,6 +106,13 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
     const reclaimed = await queue.reclaimExpired(clock.now());
     if (reclaimed > 0) {
       logger.warn({ reclaimed }, 'jobs repris après expiration de leur lease');
+    }
+    const calendar = promoteCalendar?.(clock.nowMs());
+    if (calendar && (calendar.due.length > 0 || calendar.missed.length > 0)) {
+      logger.info(
+        { due: calendar.due.length, missed: calendar.missed.length },
+        'créneaux calendrier arrivés à échéance',
+      );
     }
     const promoted = queue.promoteScheduled();
     if (promoted > 0) {

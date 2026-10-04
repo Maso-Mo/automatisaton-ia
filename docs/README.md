@@ -44,6 +44,10 @@
     routes `POST /content/:contentId/publications` /
     `POST /publications/:id/decision`. Le parcours OAuth de bout en bout reste
     l'incrément suivant (§12).
+20. **`19-mise-en-oeuvre-etape-9.md`** — calendrier éditorial : créneaux et
+    propositions persistés, fuseaux IANA, jobs futurs et promotion, politique de
+    retard, conflits/cadences consultatifs, publication immédiate idempotente,
+    SSE, dashboard et validation mobile.
 
 
 ## Règles de rédaction

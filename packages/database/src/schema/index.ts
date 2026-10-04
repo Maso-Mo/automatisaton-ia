@@ -18,6 +18,7 @@ export * from './media';
 export * from './news';
 export * from './projects';
 export * from './publishing';
+export * from './scheduling';
 export * from './system';
 export * from './users';
 
@@ -59,6 +60,7 @@ import {
 } from './publishing';
 import { mediaAssets, messageAttachments, transcripts } from './media';
 import { newsItems, newsSources } from './news';
+import { calendarChangeProposals, calendarSlots } from './scheduling';
 
 /** Liste de référence : sert aux tests de migration et au diagnostic. */
 export const STEP_ONE_TABLES = [
@@ -187,6 +189,14 @@ export const STEP_EIGHT_TABLES = [
   performancePatterns,
 ] as const;
 
+/** L'intention calendrier et ses propositions humaines (étape 9). */
+export const STEP_NINE_TABLE_NAMES: readonly string[] = [
+  'calendar_slots',
+  'calendar_change_proposals',
+];
+
+export const STEP_NINE_TABLES = [calendarSlots, calendarChangeProposals] as const;
+
 /** Les deux tables éditoriales de l'étape 3, avec les autres : elles vivent dans `./editorial`. */
 export const STEP_THREE_EDITORIAL_TABLES = [contentSubjects, subjectAngles] as const;
 
@@ -209,4 +219,5 @@ export const REQUIRED_TABLE_NAMES: readonly string[] = [
   ...STEP_SIX_TABLE_NAMES,
   ...STEP_SEVEN_TABLE_NAMES,
   ...STEP_EIGHT_TABLE_NAMES,
+  ...STEP_NINE_TABLE_NAMES,
 ];

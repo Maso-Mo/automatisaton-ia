@@ -241,6 +241,7 @@ export interface EditorialItemPatch {
   editRatio?: number | null;
   regeneratedCount?: number;
   approvedAt?: number | null;
+  scheduledFor?: number | null;
   publishedAt?: number | null;
   archivedAt?: number | null;
 }
@@ -735,6 +736,7 @@ export function createEditorialStore(
       if (patch.editRatio !== undefined) set.edit_ratio = patch.editRatio;
       if (patch.regeneratedCount !== undefined) set.regenerated_count = patch.regeneratedCount;
       if (patch.approvedAt !== undefined) set.approved_at = patch.approvedAt;
+      if (patch.scheduledFor !== undefined) set.scheduled_for = patch.scheduledFor;
       if (patch.publishedAt !== undefined) set.published_at = patch.publishedAt;
       if (patch.archivedAt !== undefined) set.archived_at = patch.archivedAt;
       handle.db.update(contentItems).set(set).where(eq(contentItems.id, id)).run();
