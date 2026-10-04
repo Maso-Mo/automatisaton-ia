@@ -4,19 +4,7 @@ import { createProject } from '@aia/core';
 import { createMemoryStack } from '../support/project-memory';
 import { createTestContext, type TestContext } from '../support/harness';
 
-/**
- * Le **schéma de la veille** (docs/03 §13, docs/10 §4.7), livré à l'étape 7 sans
- * son pipeline.
- *
- * Deux choses sont vérifiées, et la seconde est la plus importante :
- *
- * 1. le modèle de données tient ses promesses : contraintes `CHECK`, unicité de
- *    l'URL d'une source, unicité de l'empreinte d'une actualité, déduplication à
- *    l'insertion ;
- * 2. **aucune exécution de veille n'existe** : aucun type de job de collecte n'est
- *    enregistré, donc la file refuse d'en enfiler un. C'est ce qui garantit que
- *    l'étape 7 n'a pas construit l'étape 10 à moitié (docs/10 §1.3).
- */
+/** Le schéma amorcé à l'étape 7, désormais complété par le pipeline de l'étape 10. */
 
 let context: TestContext;
 let projectId: string;
@@ -43,7 +31,7 @@ function codeOf(run: () => unknown): string | undefined {
   throw new Error('l’appel aurait dû échouer');
 }
 
-describe('tables de la veille : le modèle existe, la collecte non', () => {
+describe('tables de la veille : modèle et configuration', () => {
   it('crée les deux tables attendues, et rien de plus', () => {
     const tables = listTables(context.handle);
     expect(tables).toContain('news_sources');
@@ -76,7 +64,7 @@ describe('tables de la veille : le modèle existe, la collecte non', () => {
       ),
     ).toBeDefined();
 
-    // Le type est celui du modèle : `rss`, `atom`, `api`, `manual`.
+    // Le type public `web` complète les formats historiques conservés en base.
     expect(
       codeOf(() => handleInsertBadSource(store, { kind: 'scraping' as unknown as 'rss' })),
     ).toBeDefined();
@@ -119,15 +107,59 @@ describe('tables de la veille : le modèle existe, la collecte non', () => {
     expect(store.listItems(projectId)).toHaveLength(1);
   });
 
-  it('aucun job de veille n’est exécutable : le pipeline arrive à l’étape 10', async () => {
-    // 1. Aucun type de job de collecte n'est enregistré dans le worker.
-    expect(context.registry.types().some((type) => /news|veille|fetch|rss/.test(type))).toBe(false);
-    // 2. La file refuse donc d'en enfiler un : un job que personne ne sait
-    //    exécuter ne doit jamais être créé (docs/02 §3).
-    await expect(context.queue.enqueue('fetch_news', {})).rejects.toMatchObject({
-      code: 'JOB_TYPE_UNKNOWN',
+  it('expire une actualité arrivée à sa limite sans supprimer sa provenance', () => {
+    const store = news();
+    const source = store.createSource({
+      projectId,
+      name: 'Flux avec rétention',
+      kind: 'rss',
+      url: 'https://exemple.test/retention.xml',
     });
-    expect(context.queue.counts().queued ?? 0).toBe(0);
+    const inserted = store.insertItem({
+      projectId,
+      sourceId: source.id,
+      title: 'Actualité arrivée à expiration',
+      url: 'https://exemple.test/expiree',
+      contentHash: 'b'.repeat(64),
+      expiresAt: context.clock.nowMs() - 1,
+    });
+    expect(store.expireBefore(context.clock.nowMs())).toBe(1);
+    expect(store.itemById(inserted.item.id)).toMatchObject({
+      status: 'expired',
+      sourceId: source.id,
+    });
+  });
+
+  it('modifie catégories, fréquence et confiance, puis respecte l’échéance', () => {
+    const store = news();
+    const source = store.createSource({
+      projectId,
+      name: 'Flux configurable',
+      kind: 'web',
+      url: 'https://exemple.test/news.json',
+      categories: ['dev'],
+      refreshHours: 12,
+    });
+    const updated = store.updateSource(source.id, {
+      categories: ['ia', 'outils'],
+      authority: 5,
+      refreshHours: 6,
+      language: 'fr',
+    });
+    expect(updated).toMatchObject({
+      categories: ['ia', 'outils'],
+      authority: 5,
+      refreshHours: 6,
+      language: 'fr',
+    });
+    store.recordSourceSuccess(source.id);
+    expect(store.listDueSources()).toHaveLength(0);
+    context.clock.advance(6 * 60 * 60_000);
+    expect(store.listDueSources()).toHaveLength(1);
+
+    expect(store.claimCollectionCycle('2026-03-10T18:00:00.000Z')).toBe(true);
+    expect(store.claimCollectionCycle('2026-03-10T18:00:00.000Z')).toBe(false);
+    expect(store.claimCollectionCycle('2026-03-10T19:00:00.000Z')).toBe(true);
   });
 });
 
@@ -135,7 +167,7 @@ describe('tables de la veille : le modèle existe, la collecte non', () => {
 function handleInsertBadSource(
   store: ReturnType<typeof createNewsStore>,
   overrides: {
-    kind?: 'rss' | 'atom' | 'api' | 'manual';
+    kind?: 'rss' | 'atom' | 'web' | 'api' | 'manual';
     authority?: number;
     refreshHours?: number;
   },

@@ -10,9 +10,10 @@ import { VideoView } from './features/video/VideoView';
 import { ProjectsView } from './features/projects/ProjectsView';
 import { CalendarView } from './features/calendar/CalendarView';
 import { DashboardView } from './features/calendar/DashboardView';
+import { NewsView } from './features/news/NewsView';
 
 /**
- * Application de l'étape 9 : huit vues, sans routeur (un routeur ne se justifie
+ * Application de l'étape 10 : neuf vues, sans routeur (un routeur ne se justifie
  * pas encore pour cette navigation compacte, docs/10 §1.3).
  *
  * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
@@ -24,6 +25,8 @@ import { DashboardView } from './features/calendar/DashboardView';
  *   valider.
  * - **Aujourd’hui / Calendrier** (étape 9) : surveiller les échéances et organiser
  *   des publications futures dans le fuseau choisi.
+ * - **News / Veille** (étape 10) : configurer des sources, comprendre le score,
+ *   vérifier les faits et proposer une adaptation sans publication autonome.
  * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
  *   maître se relit et se valide — c'est elle qui alimente le plan.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
@@ -35,6 +38,7 @@ import { DashboardView } from './features/calendar/DashboardView';
 type View =
   | 'dashboard'
   | 'calendar'
+  | 'news'
   | 'diagnostic'
   | 'projects'
   | 'conversation'
@@ -74,14 +78,15 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 9 : préparez la semaine, choisissez l’heure locale et suivez chaque publication sans
-          perdre l’idempotence du pipeline.
+          Étape 10 : collectez des sources vérifiables, comprenez leur score et validez chaque
+          adaptation éditoriale.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
             [
               ['dashboard', 'Aujourd’hui'],
               ['calendar', 'Calendrier'],
+              ['news', 'News / Veille'],
               ['plan', 'Plan éditorial'],
               ['review', 'Revue des contenus'],
               ['video', 'Montage vidéo'],
@@ -109,9 +114,16 @@ export function App() {
 
       {view === 'plan' && <EditorialView />}
 
-      {view === 'dashboard' && <DashboardView onOpenCalendar={() => setView('calendar')} />}
+      {view === 'dashboard' && (
+        <DashboardView
+          onOpenCalendar={() => setView('calendar')}
+          onOpenNews={() => setView('news')}
+        />
+      )}
 
       {view === 'calendar' && <CalendarView />}
+
+      {view === 'news' && <NewsView />}
 
       {view === 'review' && <ReviewView />}
 

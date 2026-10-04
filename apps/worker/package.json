@@ -14,6 +14,7 @@
     "@aia/core": "workspace:*",
     "@aia/database": "workspace:*",
     "@aia/media": "workspace:*",
+    "@aia/news": "workspace:*",
     "@aia/observability": "workspace:*",
     "@aia/publishing": "workspace:*",
     "@aia/queue": "workspace:*",

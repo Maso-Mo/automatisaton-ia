@@ -32,6 +32,8 @@ export interface WorkerLoopOptions {
   offline: boolean;
   /** Promotion métier des créneaux, exécutée avant la réservation des jobs. */
   promoteCalendar?: (nowMs: number) => { due: string[]; missed: string[] };
+  /** Enfile les tâches périodiques une seule fois par fenêtre persistée. */
+  enqueueRecurring?: (nowMs: number) => Promise<number>;
   /** Délai maximal accordé au job courant avant libération du lease (docs/08 §2.4). */
   shutdownGraceMs?: number;
 }
@@ -60,6 +62,7 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
     batchSize,
     offline,
     promoteCalendar,
+    enqueueRecurring,
   } = options;
   const shutdownGraceMs = options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS;
 
@@ -114,6 +117,8 @@ export function createWorkerLoop(options: WorkerLoopOptions): WorkerLoop {
         'créneaux calendrier arrivés à échéance',
       );
     }
+    const recurring = (await enqueueRecurring?.(clock.nowMs())) ?? 0;
+    if (recurring > 0) logger.info({ recurring }, 'jobs périodiques ajoutés');
     const promoted = queue.promoteScheduled();
     if (promoted > 0) {
       logger.debug({ promoted }, 'jobs échus rendus disponibles');

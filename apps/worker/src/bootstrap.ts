@@ -5,6 +5,7 @@ import {
   createConversationStore,
   createEditorialStore,
   createMediaStore,
+  createNewsStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -32,6 +33,7 @@ import {
 import { createLogger, type AppLogger } from '@aia/observability';
 import {
   PUBLISH_CONTENT_JOB,
+  COLLECT_NEWS_JOB,
   createJobRegistry,
   generateContentSpec,
   SqliteQueue,
@@ -71,6 +73,7 @@ import {
   type EditorialPorts,
   type ProjectMemoryPorts,
 } from '@aia/core';
+import { createFeedProvider, createPublicJsonProvider, type NewsSourceType } from '@aia/news';
 import {
   createAccountLocks,
   createApiConnector,
@@ -79,6 +82,7 @@ import {
   type PlatformConnector,
 } from '@aia/publishing';
 import { createGenerateContentHandler } from './handlers/generate-content';
+import { createCollectNewsHandler } from './handlers/collect-news';
 import {
   createPublishContentHandler,
   type PublicationContentSource,
@@ -340,6 +344,41 @@ export function buildWorker(
     clock,
     newId: () => uuidv7(clock.nowMs()),
   };
+  const news = createNewsStore(handle, () => clock.nowMs());
+  const newsProviders = new Map([
+    ['rss', createFeedProvider({ type: 'rss', nowMs: () => clock.nowMs() })],
+    ['atom', createFeedProvider({ type: 'atom', nowMs: () => clock.nowMs() })],
+    ['web', createPublicJsonProvider({ nowMs: () => clock.nowMs() })],
+  ] as const);
+
+  registry.register(
+    createCollectNewsHandler({
+      news,
+      provider: (type: NewsSourceType) => newsProviders.get(type),
+      projectContext: (projectId) => {
+        const project = memoryPorts.store.projects.byId(projectId);
+        if (!project) return null;
+        const facts = memoryPorts.store.facts.list({ projectId, includeInactive: false });
+        const audiences = memoryPorts.store.audienceProfiles.list(projectId);
+        return {
+          name: project.name,
+          terms: [
+            project.positioning ?? '',
+            project.targetGoal ?? '',
+            ...facts.flatMap((fact) => [fact.statement, fact.detail ?? '']),
+          ].filter(Boolean),
+          audienceTerms: audiences.flatMap((audience) => [
+            audience.name,
+            audience.description ?? '',
+            ...audience.painPoints,
+            ...audience.goals,
+            ...audience.vocabulary,
+          ]),
+        };
+      },
+      clock,
+    }),
+  );
 
   const conversationStore = createConversationStore(handle, { nowMs: () => clock.nowMs() });
 
@@ -632,6 +671,12 @@ export function buildWorker(
     batchSize: config.env.QUEUE_CONCURRENCY,
     offline: config.env.OFFLINE_MODE,
     promoteCalendar: (nowMs) => scheduling.promoteDue(nowMs, CALENDAR_LATE_TOLERANCE_MS),
+    enqueueRecurring: async (nowMs) => {
+      const bucket = new Date(Math.floor(nowMs / 3_600_000) * 3_600_000).toISOString();
+      if (!news.claimCollectionCycle(bucket)) return 0;
+      await queue.enqueue(COLLECT_NEWS_JOB, {}, { dedupeKey: `collect-news-cycle:${bucket}` });
+      return 1;
+    },
   });
 
   const shutdown = async (): Promise<void> => {

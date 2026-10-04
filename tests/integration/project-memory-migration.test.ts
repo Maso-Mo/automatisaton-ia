@@ -26,19 +26,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 let directory: string;
 let handle: ReturnType<typeof openDatabase>;
 
-/** Dossier de migrations ne contenant que la première migration. */
-function partialMigrationsFolder(base: string): string {
-  const folder = join(base, 'migrations-0000');
+/** Dossier temporaire contenant les migrations jusqu'à l'index demandé inclus. */
+function partialMigrationsFolder(base: string, lastIndex = 0): string {
+  const folder = join(base, `migrations-through-${String(lastIndex).padStart(4, '0')}`);
   mkdirSync(join(folder, 'meta'), { recursive: true });
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, 'meta', '_journal.json'), 'utf8'),
   ) as { entries: Array<{ tag: string }> };
-  const first = journal.entries[0];
-  if (!first) throw new Error('journal de migrations vide');
-  copyFileSync(join(MIGRATIONS_FOLDER, `${first.tag}.sql`), join(folder, `${first.tag}.sql`));
+  const selected = journal.entries.slice(0, lastIndex + 1);
+  if (selected.length !== lastIndex + 1) throw new Error('journal de migrations incomplet');
+  for (const entry of selected) {
+    copyFileSync(join(MIGRATIONS_FOLDER, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+  }
   writeFileSync(
     join(folder, 'meta', '_journal.json'),
-    JSON.stringify({ ...journal, entries: [first] }),
+    JSON.stringify({ ...journal, entries: selected }),
   );
   return folder;
 }
@@ -122,18 +124,19 @@ describe('migration ascendante de la mémoire des projets', () => {
     seedStepOne(handle);
 
     const second = applyMigrations(handle);
-    // Huit migrations s'appliquent sur la base peuplée : `0001` (mémoire des
+    // Neuf migrations s'appliquent sur la base peuplée : `0001` (mémoire des
     // projets), `0002` (conversation et fiche maître) puis `0003` (contenus
     // versionnés, veille et observabilité), `0004` (publication manuelle),
     // `0005` (audio, transcriptions et pièces jointes de message), `0006` (le
     // schéma de la veille et le rendu vidéo vertical) et `0007` (plafonds de
-    // dépense et mesures de l'étape 8), puis `0008` (calendrier de l'étape 9).
+    // dépense et mesures de l'étape 8), `0008` (calendrier de l'étape 9), puis
+    // `0009` (colonnes de collecte, classement et vérification de l'étape 10).
     // La deuxième reconstruit `project_facts`
     // pour y ajouter la clé étrangère vers `messages` : c'est exactement le genre
     // de migration qui casse une base utilisateur si elle n'est pas testée sur
     // des données réelles.
-    expect(second.applied).toBe(8);
-    expect(appliedMigrationCount(handle)).toBe(9);
+    expect(second.applied).toBe(9);
+    expect(appliedMigrationCount(handle)).toBe(10);
 
     const rows = handle.sqlite
       .prepare(
@@ -197,5 +200,97 @@ describe('migration ascendante de la mémoire des projets', () => {
 
     // Réappliquer ne fait rien : la migration est idempotente.
     expect(applyMigrations(handle).applied).toBe(0);
+  });
+
+  it('complète la veille d’une base étape 9 sans perdre ses sources ni ses actualités', () => {
+    const beforeNewsUpgrade = applyMigrations(handle, {
+      migrationsFolder: partialMigrationsFolder(directory, 8),
+    });
+    expect(beforeNewsUpgrade.applied).toBe(9);
+
+    handle.sqlite
+      .prepare(
+        'insert into users (id, display_name, locale, created_at, updated_at) values (?, ?, ?, ?, ?)',
+      )
+      .run('user-1', 'Propriétaire local', 'fr-FR', 1_000, 1_000);
+    handle.sqlite
+      .prepare(
+        'insert into projects (id, owner_id, name, slug, status, language, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'projet-1',
+        'user-1',
+        'Projet historique',
+        'projet-historique',
+        'active',
+        'fr',
+        1_000,
+        1_000,
+      );
+    handle.sqlite
+      .prepare(
+        `insert into news_sources
+          (id, project_id, name, kind, url, keywords_json, exclude_keywords_json, language,
+           authority, enabled, refresh_hours, consecutive_failures, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'source-historique',
+        'projet-1',
+        'Flux historique',
+        'rss',
+        'https://example.test/feed.xml',
+        '["react"]',
+        '[]',
+        'fr',
+        4,
+        1,
+        12,
+        0,
+        1_000,
+        1_000,
+      );
+    handle.sqlite
+      .prepare(
+        `insert into news_items
+          (id, project_id, source_id, title, summary, url, canonical_url, fetched_at,
+           content_hash, topic_tags_json, status, verified, llm_enriched, created_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'news-historique',
+        'projet-1',
+        'source-historique',
+        'React historique',
+        'Une actualité conservée.',
+        'https://example.test/react',
+        'https://example.test/react',
+        2_000,
+        'a'.repeat(64),
+        '["react"]',
+        'new',
+        1,
+        0,
+        2_000,
+      );
+
+    expect(applyMigrations(handle).applied).toBe(1);
+    const source = handle.sqlite
+      .prepare('select name, categories_json from news_sources where id = ?')
+      .get('source-historique') as { name: string; categories_json: string | null };
+    const item = handle.sqlite
+      .prepare('select title, urgency, verification_status from news_items where id = ?')
+      .get('news-historique') as {
+      title: string;
+      urgency: string;
+      verification_status: string;
+    };
+    expect(source).toEqual({ name: 'Flux historique', categories_json: null });
+    expect(item).toEqual({
+      title: 'React historique',
+      urgency: 'NORMAL',
+      verification_status: 'source_confirmed',
+    });
+    expect(handle.sqlite.prepare('pragma foreign_key_check').all()).toHaveLength(0);
   });
 });

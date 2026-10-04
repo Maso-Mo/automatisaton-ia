@@ -48,6 +48,10 @@
     propositions persistés, fuseaux IANA, jobs futurs et promotion, politique de
     retard, conflits/cadences consultatifs, publication immédiate idempotente,
     SSE, dashboard et validation mobile.
+21. **`20-mise-en-oeuvre-etape-10.md`** — veille et adaptation éditoriale :
+    providers RSS/Atom/JSON, collecte reprenable, déduplication et scoring locaux,
+    vérification, suggestions, proposition calendrier à validation humaine, SSE,
+    budget nul par défaut et parcours E2E local.
 
 
 ## Règles de rédaction

@@ -5,6 +5,7 @@ import {
   createConversationStore,
   createEditorialStore,
   createMediaStore,
+  createNewsStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -36,6 +37,7 @@ import { createLogger, type AppLogger } from '@aia/observability';
 import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } from '@aia/ai';
 import {
   createJobRegistry,
+  collectNewsSpec,
   generateContentSpec,
   publishContentSpec,
   renderVideoSpec,
@@ -96,6 +98,7 @@ export interface ApiContext {
   editorial: EditorialFeatureDeps;
   publishing: ReturnType<typeof createPublishingStore>;
   scheduling: ReturnType<typeof createSchedulingStore>;
+  news: ReturnType<typeof createNewsStore>;
   media: ReturnType<typeof createMediaStore>;
   /**
    * Étape 7 : import des vidéos, proposition du plan, suivi du rendu. Le rendu
@@ -317,6 +320,8 @@ export function buildApi(
     // Étape 8 : la publication par API est, elle aussi, un job du worker ; l'API
     // ne fait que le mettre en file (docs/02 §3).
     registry.registerSpec(publishContentSpec);
+    // Étape 10 : la collecte est exécutée par le worker, jamais dans la requête.
+    registry.registerSpec(collectNewsSpec);
     return new SqliteQueue({
       db: handle,
       registry,
@@ -345,6 +350,7 @@ export function buildApi(
   };
   const publishing = createPublishingStore(handle, () => clock.nowMs());
   const scheduling = createSchedulingStore(handle, () => clock.nowMs());
+  const news = createNewsStore(handle, () => clock.nowMs());
   const media = createMediaStore(handle, () => clock.nowMs());
   const renders = createVideoRenderStore(handle, () => clock.nowMs());
   const mediaStorage = new LocalStorageAdapter(config.paths.mediaRoot);
@@ -404,6 +410,7 @@ export function buildApi(
     editorial,
     publishing,
     scheduling,
+    news,
     media,
     video,
     renders,

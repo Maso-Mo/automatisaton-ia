@@ -783,6 +783,66 @@ export interface CalendarSummaryView {
   approvedUnscheduled: number;
 }
 
+export type NewsUrgencyView = 'BREAKING' | 'HIGH' | 'NORMAL' | 'EVERGREEN';
+
+export interface NewsSourceView {
+  id: string;
+  projectId: string;
+  name: string;
+  kind: 'rss' | 'atom' | 'web';
+  url: string;
+  categories: string[];
+  keywords: string[];
+  excludeKeywords: string[];
+  language: string | null;
+  authority: number;
+  enabled: boolean;
+  refreshHours: number;
+  lastFetchAt: number | null;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+}
+
+export interface NewsItemView {
+  id: string;
+  projectId: string;
+  sourceId: string;
+  externalId: string | null;
+  title: string;
+  summary: string | null;
+  url: string;
+  canonicalUrl: string | null;
+  author: string | null;
+  publishedAt: number | null;
+  discoveredAt: number;
+  language: string | null;
+  categories: string[];
+  relevanceScore: number | null;
+  freshnessScore: number | null;
+  trustScore: number | null;
+  projectMatchScore: number | null;
+  audienceMatchScore: number | null;
+  finalScore: number | null;
+  scoreExplanation: string[];
+  urgency: NewsUrgencyView;
+  verificationStatus: string;
+  claims: string[];
+  suggestion: {
+    angle?: string;
+    platform?: string;
+    reason?: string;
+    relevanceWindowHours?: number;
+    verificationRequired?: boolean;
+  } | null;
+  status: string;
+}
+
+export interface NewsSummaryView {
+  count: number;
+  items: NewsItemView[];
+}
+
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
@@ -1136,6 +1196,65 @@ export const api = {
     postJson<{ proposal: CalendarProposalView; slot: CalendarSlotView }>(
       `/calendar/proposals/${encodeURIComponent(id)}/decision`,
       { decision },
+    ),
+
+  // --- Veille et adaptation éditoriale (étape 10) ------------------------
+  newsSources: (projectId?: string) =>
+    getJson<{ sources: NewsSourceView[] }>(`/news/sources${queryString({ projectId })}`),
+  createNewsSource: (body: {
+    projectId: string;
+    name: string;
+    type: 'rss' | 'atom' | 'web';
+    url: string;
+    categories: string[];
+    keywords: string[];
+    excludeKeywords: string[];
+    trustLevel: number;
+    refreshHours: number;
+    language?: string | null;
+  }) => postJson<{ source: NewsSourceView }>('/news/sources', body),
+  updateNewsSource: (
+    id: string,
+    body: Partial<{
+      name: string;
+      url: string;
+      categories: string[];
+      keywords: string[];
+      excludeKeywords: string[];
+      language: string | null;
+      trustLevel: number;
+      refreshHours: number;
+      enabled: boolean;
+    }>,
+  ) => patchJson<{ source: NewsSourceView }>(`/news/sources/${encodeURIComponent(id)}`, body),
+  collectNewsSource: (id: string) =>
+    postJson<{ jobId: string }>(`/news/sources/${encodeURIComponent(id)}/collect`, {}),
+  newsItems: (
+    params: {
+      projectId?: string;
+      status?: string;
+      urgency?: NewsUrgencyView;
+      minScore?: number;
+      limit?: number;
+    } = {},
+  ) => getJson<{ items: NewsItemView[] }>(`/news${queryString(params)}`),
+  newsSummary: () => getJson<NewsSummaryView>('/news/summary'),
+  dismissNews: (id: string, reason = 'Ignorée depuis la veille.') =>
+    postJson<{ item: NewsItemView }>(`/news/${encodeURIComponent(id)}/dismiss`, { reason }),
+  verifyNews: (id: string, status: 'needs_review' | 'confirmed' | 'disputed') =>
+    postJson<{ item: NewsItemView }>(`/news/${encodeURIComponent(id)}/verification`, { status }),
+  createNewsSuggestion: (id: string) =>
+    postJson<{ item: NewsItemView; suggestion: NonNullable<NewsItemView['suggestion']> }>(
+      `/news/${encodeURIComponent(id)}/suggestion`,
+      {},
+    ),
+  proposeNewsInCalendar: (
+    id: string,
+    body: { calendarSlotId: string; localDate: string; localTime: string; timezone: string },
+  ) =>
+    postJson<{ proposal: CalendarProposalView; item: NewsItemView }>(
+      `/news/${encodeURIComponent(id)}/calendar-proposal`,
+      body,
     ),
 };
 

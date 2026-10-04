@@ -167,3 +167,24 @@ export const publishContentSpec: JobSpec<PublishContentInput> = {
   requiresNetwork: true,
   dedupeKey: (input) => `publish:${input.publicationId}`,
 };
+
+/** Collecte déterministe des sources de veille dues ou d'une source demandée manuellement. */
+export const COLLECT_NEWS_JOB = 'collect_news';
+
+export const collectNewsInputSchema = z.object({
+  sourceId: z.string().min(1).optional(),
+});
+
+export type CollectNewsInput = z.infer<typeof collectNewsInputSchema>;
+
+export const collectNewsSpec: JobSpec<CollectNewsInput> = {
+  type: COLLECT_NEWS_JOB,
+  inputSchema: collectNewsInputSchema,
+  maxAttempts: 3,
+  backoff: (attempt) => 5 * 60_000 * 2 ** (Math.max(1, attempt) - 1),
+  leaseMs: 2 * 60_000,
+  idempotent: true,
+  priority: 6,
+  requiresNetwork: true,
+  dedupeKey: (input) => `collect-news:${input.sourceId ?? 'due-sources'}`,
+};

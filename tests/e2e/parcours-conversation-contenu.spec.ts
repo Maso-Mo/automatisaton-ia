@@ -383,6 +383,49 @@ test.describe('parcours 1 — de l’entretien à la publication manuelle', () =
       await slot.getByRole('button', { name: 'Enregistrer le déplacement' }).click();
       await expect(slot).toContainText('11:00');
 
+      // Étape 10 : une vraie source RSS est configurée dans l'interface. Le
+      // transport est simulé dans la pile E2E, mais parser, normaliser, scorer,
+      // dédupliquer et persister empruntent exactement le chemin de production.
+      await openView(page, 'News / Veille');
+      await page
+        .getByRole('combobox', { name: 'Projet', exact: true })
+        .selectOption({ label: PROJECT.name });
+      await page.getByLabel('Nom de la source').fill('Flux React E2E');
+      await page.getByLabel('URL publique').fill('https://e2e.test/feed.xml');
+      await page.getByLabel('Catégories (virgules)').fill('react, typescript, dev, ia');
+      await page.getByLabel('Confiance 1–5').fill('5');
+      await page.getByLabel('Fréquence (heures)').fill('6');
+      await page.getByRole('button', { name: 'Ajouter la source' }).click();
+      const source = page.locator('article').filter({ hasText: 'Flux React E2E' });
+      await expect(source).toBeVisible();
+      await source.getByRole('button', { name: 'Collecter' }).click();
+
+      const detected = page
+        .locator('article[data-news-item]')
+        .filter({ hasText: 'React 20 améliore TypeScript' });
+      await expect(detected).toBeVisible();
+      await expect(detected).toContainText(/\d+\/100/);
+      await expect(detected).toContainText(PROJECT.name);
+      await detected.getByRole('button', { name: 'Créer une idée' }).click();
+      await expect(detected).toContainText('Idée :');
+
+      await detected.getByRole('button', { name: 'Proposer dans le calendrier' }).click();
+      await detected.getByLabel('Créneau à déplacer').selectOption({ index: 1 });
+      await detected.getByLabel('Nouvelle date').fill(tomorrowKey);
+      await detected.getByLabel('Nouvelle heure').fill('12:00');
+      await detected.getByRole('button', { name: 'Créer la proposition' }).click();
+      // Le déplacement reste seulement proposé tant que l'utilisateur ne l'a
+      // pas accepté ; ce bouton est la frontière humaine obligatoire.
+      await expect(detected.getByRole('button', { name: 'Accepter la proposition' })).toBeVisible();
+      await detected.getByRole('button', { name: 'Accepter la proposition' }).click();
+
+      await openView(page, 'Calendrier');
+      await page
+        .getByRole('combobox', { name: 'Projet', exact: true })
+        .selectOption({ value: projectId });
+      await page.getByRole('button', { name: 'Demain' }).click();
+      await expect(slot).toContainText('12:00');
+
       // Validation responsive réelle : les actions restent tactiles et aucune
       // largeur 360/390 px ne produit de débordement horizontal.
       for (const width of [360, 390]) {

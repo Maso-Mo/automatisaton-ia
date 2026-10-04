@@ -13,6 +13,7 @@ import {
   createConversationStore,
   createEditorialStore,
   createMediaStore,
+  createNewsStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -21,6 +22,7 @@ import {
   REQUIRED_TABLE_NAMES,
   type DatabaseHandle,
 } from '@aia/database';
+import { createFeedProvider } from '@aia/news';
 import { LocalStorageAdapter, ScriptedFfmpegRunner, ScriptedTranscriber } from '@aia/media';
 import {
   CALENDAR_LATE_TOLERANCE_MS,
@@ -45,6 +47,7 @@ import {
 import { buildServer } from '../../../apps/api/src/server';
 import { buildApi } from '../../../apps/api/src/bootstrap';
 import { createGenerateContentHandler } from '../../../apps/worker/src/handlers/generate-content';
+import { createCollectNewsHandler } from '../../../apps/worker/src/handlers/collect-news';
 import { createPublishContentHandler } from '../../../apps/worker/src/handlers/publish-content';
 import { createRenderVideoHandler } from '../../../apps/worker/src/handlers/render-video';
 import { createTranscribeMediaHandler } from '../../../apps/worker/src/handlers/transcribe-media';
@@ -278,6 +281,42 @@ const createProvider: WriterProviderFactory = (ctx, request) => {
 };
 
 const registry = createJobRegistry();
+
+/** Flux RSS local et déterministe : le parcours de veille ne touche jamais Internet. */
+const news = createNewsStore(handle, () => clock.nowMs());
+const rss = createFeedProvider({
+  type: 'rss',
+  nowMs: () => clock.nowMs(),
+  fetch: async () =>
+    new Response(
+      `<?xml version="1.0" encoding="UTF-8" ?>
+       <rss version="2.0"><channel><title>Veille E2E</title><item>
+       <guid>react-e2e-20</guid>
+       <title>React 20 améliore TypeScript pour les développeurs</title>
+       <link>https://example.test/react-20?utm_source=e2e</link>
+       <description>Une nouvelle API aide les équipes frontend et les outils IA.</description>
+       <pubDate>${new Date(clock.nowMs()).toUTCString()}</pubDate>
+       <category>react</category><category>typescript</category><category>dev</category>
+       </item></channel></rss>`,
+      { status: 200, headers: { 'content-type': 'application/rss+xml' } },
+    ),
+});
+registry.register(
+  createCollectNewsHandler({
+    news,
+    provider: (type) => (type === 'rss' ? rss : undefined),
+    projectContext: (projectId) => {
+      const project = memoryStore.projects.byId(projectId);
+      if (!project) return null;
+      return {
+        name: project.name,
+        terms: ['react', 'typescript', 'frontend', 'ia', 'outils'],
+        audienceTerms: ['développeurs', 'équipes'],
+      };
+    },
+    clock,
+  }),
+);
 registry.register({
   ...generateContentSpec,
   handler: createGenerateContentHandler({

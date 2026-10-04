@@ -32,7 +32,7 @@ Conséquences — ce que cela coûte, ce que cela interdit, ce qu'il faudra assu
 | État | Où elle vit | Combien de temps elle est valable |
 |---|---|---|
 | **Prise** (verrouillée) | §2 de ce document, + le document qui la détaille | Jusqu'à ce qu'une décision de remplacement explicite la remplace |
-| **Ouverte** | §3 (D2 à D6 ; D1 reste visible mais est tranchée) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
+| **Ouverte** | §3 (D2 à D4 et D6 ; D1 et D5 restent visibles mais sont tranchées) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
 | **Refusée** | §6 (« ce qui doit attendre ») | Jusqu'à sa condition de réexamen, écrite noir sur blanc |
 
 **Une décision n'est jamais supprimée.** Une décision remplacée reste visible avec la mention
@@ -136,6 +136,7 @@ Source : [`07-securite-secrets-auth.md`](07-securite-secrets-auth.md) (§3, §4,
 | **Écoute sur `127.0.0.1` ; `0.0.0.0` refusé au démarrage** | Un serveur accessible au réseau sur un poste personnel est une erreur de configuration coûteuse | Écouter partout avec authentification · tunnel obligatoire | L'accès depuis un autre appareil demande une configuration explicite |
 | **OAuth entièrement local, avec `state` + PKCE, identifiants propres à chaque installation** | Aucun serveur public, donc aucun secret partagé entre installations | Un serveur d'authentification central · le flux « device » de chaque plateforme | Pas d'application distribuée : chaque utilisateur enregistre sa propre application côté plateforme |
 | **Trois natures de secrets séparées** : `.env`, clés cryptographiques, jetons chiffrés en base | Mélanger les trois fait fuiter les clés avec les jetons | Tout dans `.env` · tout en base · un gestionnaire de secrets externe | Trois endroits à sauvegarder, à documenter et à expliquer |
+| **D5 : base et médias sont sauvegardés séparément** | SQLite reste petit et change souvent ; les médias sont volumineux, immuables et potentiellement non bornés | Snapshot complet répété · médias uniquement à la demande | La restauration a deux étapes et exige de préserver les identifiants de fichiers |
 | **Enveloppe `enc:v1:key_version:nonce:ciphertext:tag`, AES-256-GCM** | Il faut pouvoir changer d'algorithme et faire tourner la clé sans casser les données | Chiffrement ad hoc · chiffrer seulement quelques colonnes « sensibles » | Chaque lecture de jeton paie un déchiffrement — négligeable au volume concerné |
 | **Le chiffrement protège la fuite de la base, pas un poste compromis — et on l'écrit** | Promettre plus que la réalité est la meilleure façon de perdre la confiance | Ne rien dire · laisser croire à une protection totale | Une limite assumée, écrite dans l'interface et dans la documentation |
 | **Rédaction au point de passage unique + test canari obligatoire en CI** | Un seul oubli de rédaction suffit à écrire un jeton dans un log | Relire le code · interdire les logs | Un test qui échoue à chaque nouveau chemin de journalisation |
@@ -188,10 +189,10 @@ Source : [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-e
 
 ---
 
-## 3. Les décisions D1 à D6 (D1 tranchée, D2 à D6 ouvertes)
+## 3. Les décisions D1 à D6 (D1 et D5 tranchées, D2 à D4 et D6 ouvertes)
 
 Ces six décisions viennent de [`02-architecture.md`](02-architecture.md) §15. D1 a été tranchée à
-l'étape 5 ; les cinq autres restent ouvertes jusqu'à disposer de leur mesure. Chacune indique
+l'étape 5 et D5 à l'étape 10 ; les autres restent ouvertes jusqu'à disposer de leur mesure. Chacune indique
 l'étape qui la requiert et le **critère** qui permettra de choisir.
 
 | # | Décision | Étape | Option A | Option B | Ce qui tranchera |
@@ -200,7 +201,7 @@ l'étape qui la requiert et le **critère** qui permettra de choisir.
 | D2 | Modèle de transcription par défaut | 3 | `small` (rapide, moins précis) | `medium` (plus lent, plus juste) | Le résultat sur 20 transcriptions réelles, chronométré |
 | D3 | Adaptation multi-plateformes | 6 | Réécriture LLM soumise à validation | L'utilisateur réécrit lui-même | La qualité observée à l'étape 4 sur des contenus réels |
 | D4 | Fréquence de collecte analytics | 8 | Quotidien | Toutes les 6 h | Les quotas réels de l'API et l'utilité d'une fraîcheur de 6 h |
-| D5 | Sauvegarde des médias volumineux | 10 | Snapshot complet | Base et médias séparés | Le volume réellement accumulé après une semaine |
+| D5 | Sauvegarde des médias volumineux | 10 | **Tranchée : base et médias séparés** | Snapshot complet | Les médias immuables et non bornés ne doivent pas ralentir les snapshots SQLite fréquents |
 | D6 | Mode « démo » avec données fictives | 11 | Oui (démontrable à un tiers) | Non (charge de travail) | Le temps restant et l'existence d'un besoin de démonstration |
 
 ### 3.1 D1 — Nombre exact de plateformes de la V1
@@ -259,9 +260,9 @@ l'étape qui la requiert et le **critère** qui permettra de choisir.
 | **Option A — snapshot complet** | Un seul fichier ou dossier à copier, une seule commande à retenir, restauration triviale. Conséquence : un snapshot devient énorme et lent ; sauvegarder chaque jour revient à recopier des médias qui ne changent pas |
 | **Option B — base et médias séparés** | La base se sauvegarde en quelques secondes, plusieurs fois par jour ; les médias suivent un rythme plus lent. Conséquence : une restauration demande deux étapes et une convention de nommage des fichiers à respecter |
 | **Option C — base souvent, médias à la demande** | Une sauvegarde légère en continu et un export manuel des médias quand l'utilisateur en a besoin. Conséquence : après un sinistre, certains médias peuvent manquer — mais jamais les données qui décrivent le travail |
-| **Décision** | **Ouverte** |
-| **Critère** | Le volume réellement accumulé après une semaine d'usage (étape 10). Sous 2 Go, l'option A suffit largement ; au-delà, l'option B est décidée de fait |
-| **À consigner dans** | Ce document, §2 (la décision y est ajoutée le jour où elle est tranchée), avec le volume mesuré |
+| **Décision** | **Option B : base et médias séparés.** Snapshots SQLite fréquents ; médias sauvegardés à un rythme incrémental distinct. |
+| **Critère** | La différence de rythme et de volume suffit : la base change souvent et reste petite ; recopier à chaque fois des médias immuables et non bornés augmente le temps et l'espace sans améliorer la restauration. |
+| **À consigner dans** | Décision ajoutée au §2.6 et détaillée dans `20-mise-en-oeuvre-etape-10.md`. |
 
 ### 3.6 D6 — Mode « démonstration » avec données fictives
 
@@ -454,7 +455,7 @@ venir : un risque à impact 3 dont le signal est facile à rater.
 | **Hallucination factuelle validée** | Un fait erroné publié, ou un `risk='eleve'` approuvé sans vérification | Revue de la porte de sortie (le déclencheur en base), et non du prompt : c'est la porte qui a manqué |
 | **Dérive du budget d'appels LLM** | Deux semaines consécutives au plafond, ou un écart de plus de 20 % avec l'estimation | Passage en mode économie, revue de la taille des contextes envoyés, puis choix mesuré du modèle par agent |
 
-### 7.4 D1 tranchée et les cinq décisions encore ouvertes
+### 7.4 D1 et D5 tranchées, quatre décisions encore ouvertes
 
 | # | Décision | Échéance | Critère (rappel) |
 |---|---|---|---|
@@ -462,10 +463,10 @@ venir : un risque à impact 3 dont le signal est facile à rater.
 | D2 | Modèle de transcription par défaut | Étape 3 | 20 transcriptions réelles, chronométrées et corrigées |
 | D3 | Adaptation multi-plateformes assistée ou manuelle | Étape 6 (mesurée à l'étape 4) | Comparaison côte à côte avec un contenu écrit à la main |
 | D4 | Fréquence de collecte des statistiques | Étape 8 | Les quotas réels observés sur les API déployées |
-| D5 | Sauvegarde : un bloc ou deux | Étape 10 | Le volume accumulé après une semaine d'usage réel |
+| D5 | Sauvegarde : un bloc ou deux | **Tranchée à l'étape 10** | Base et médias séparés ; snapshots SQLite fréquents, médias incrémentaux |
 | D6 | Mode démonstration | Étape 11 | Le temps restant et un besoin de démonstration réel (défaut : non) |
 
-**D2 à D6 ne doivent pas être tranchées sans leur mesure.** Ce serait choisir au hasard, puis
+**D2 à D4 et D6 ne doivent pas être tranchées sans leur mesure.** Ce serait choisir au hasard, puis
 défendre le hasard.
 
 ### 7.5 Trois questions directes
@@ -511,8 +512,6 @@ existe, et qu'il peut arrêter le projet.
 [`09-tests-et-qualite.md`](09-tests-et-qualite.md) ·
 [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-etapes.md) ·
 [`README.md`](README.md)
-
-
 
 
 

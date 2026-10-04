@@ -1,8 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 
-export function DashboardView({ onOpenCalendar }: { onOpenCalendar(): void }) {
+export function DashboardView({
+  onOpenCalendar,
+  onOpenNews,
+}: {
+  onOpenCalendar(): void;
+  onOpenNews(): void;
+}) {
   const summary = useQuery({ queryKey: ['calendar-summary'], queryFn: api.calendarSummary });
+  const news = useQuery({ queryKey: ['news-summary'], queryFn: api.newsSummary });
 
   if (summary.isPending) return <p className="text-sm text-slate-600">Chargement d’aujourd’hui…</p>;
   if (summary.isError) {
@@ -62,6 +69,31 @@ export function DashboardView({ onOpenCalendar }: { onOpenCalendar(): void }) {
           </p>
         </article>
       )}
+
+      <section className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-slate-500">Actualités pertinentes aujourd’hui</p>
+            <h3 className="text-lg font-semibold">
+              {news.data?.count ?? 0} actualité(s) importante(s)
+            </h3>
+          </div>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium"
+            onClick={onOpenNews}
+          >
+            Voir la veille
+          </button>
+        </div>
+        <ul className="mt-3 grid gap-2 text-sm text-slate-700">
+          {(news.data?.items ?? []).slice(0, 3).map((item) => (
+            <li key={item.id} className="break-words">
+              {item.urgency} · {item.title}
+            </li>
+          ))}
+        </ul>
+      </section>
     </section>
   );
 }

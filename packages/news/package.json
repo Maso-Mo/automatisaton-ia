@@ -8,5 +8,8 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2"
   }
 }
