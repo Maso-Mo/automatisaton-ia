@@ -11,6 +11,7 @@ import { registerMediaRoutes } from './routes/media';
 import { registerVideoRoutes } from './routes/videos';
 import { registerCalendarRoutes } from './routes/calendar';
 import { registerNewsRoutes } from './routes/news';
+import { registerAnalyticsRoutes } from './routes/analytics';
 import type { ApiContext } from './bootstrap';
 
 /**
@@ -38,7 +39,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 10 — veille, news et adaptation éditoriale',
+    step: 'étape 11 — analytics, apprentissage et Viral Pattern Engine',
     endpoints: [
       'GET /system/health',
       'GET /jobs',
@@ -124,6 +125,16 @@ export function buildServer(context: ApiContext): FastifyInstance {
       'POST /news/:id/suggestion',
       'POST /news/:id/calendar-proposal',
       'GET /events/news',
+      'GET /analytics',
+      'POST /analytics/metrics',
+      'POST /analytics/metrics/import',
+      'POST /analytics/collect',
+      'POST /analytics/analyze',
+      'GET /analytics/patterns',
+      'POST /analytics/patterns/rebuild',
+      'GET /analytics/advice',
+      'GET /analytics/external',
+      'POST /analytics/external',
     ],
   }));
 
@@ -137,6 +148,7 @@ export function buildServer(context: ApiContext): FastifyInstance {
   registerPublishingRoutes(app, context);
   registerCalendarRoutes(app, context);
   registerNewsRoutes(app, context);
+  registerAnalyticsRoutes(app, context);
 
   return app;
 }

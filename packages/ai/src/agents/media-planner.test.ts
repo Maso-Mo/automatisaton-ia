@@ -57,6 +57,17 @@ function providerWith(text: string): ScriptedLLMProvider {
 }
 
 describe('ce que l’agent reçoit : le contexte disponible, rien de plus', () => {
+  it('reçoit les recommandations vidéo sans qu’elles dépassent les contraintes', () => {
+    const built = buildMediaPlannerPrompt(
+      input({ performanceGuidance: ['hook avant 2 s', 'cuts toutes les 3 s'] }),
+    );
+    expect(built).toContain('PERFORMANCE GUIDANCE');
+    expect(built).toContain('hook avant 2 s');
+    expect(built.indexOf('PERFORMANCE GUIDANCE')).toBeLessThan(
+      built.indexOf('Contraintes non négociables'),
+    );
+  });
+
   it('transmet durée, résolution, audio, texte approuvé et segments horodatés', () => {
     const built = buildMediaPlannerPrompt(input());
     expect(built).toContain('Durée totale : 120.0 s');

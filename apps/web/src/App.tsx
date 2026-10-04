@@ -11,9 +11,10 @@ import { ProjectsView } from './features/projects/ProjectsView';
 import { CalendarView } from './features/calendar/CalendarView';
 import { DashboardView } from './features/calendar/DashboardView';
 import { NewsView } from './features/news/NewsView';
+import { AnalyticsView } from './features/analytics/AnalyticsView';
 
 /**
- * Application de l'étape 10 : neuf vues, sans routeur (un routeur ne se justifie
+ * Application de l'étape 11 : dix vues, sans routeur (un routeur ne se justifie
  * pas encore pour cette navigation compacte, docs/10 §1.3).
  *
  * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
@@ -39,6 +40,7 @@ type View =
   | 'dashboard'
   | 'calendar'
   | 'news'
+  | 'analytics'
   | 'diagnostic'
   | 'projects'
   | 'conversation'
@@ -78,8 +80,8 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 10 : collectez des sources vérifiables, comprenez leur score et validez chaque
-          adaptation éditoriale.
+          Étape 11 : mesurez les résultats réels, comparez-les à une baseline et appliquez des
+          recommandations explicables.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
@@ -87,6 +89,7 @@ export function App() {
               ['dashboard', 'Aujourd’hui'],
               ['calendar', 'Calendrier'],
               ['news', 'News / Veille'],
+              ['analytics', 'Analytics'],
               ['plan', 'Plan éditorial'],
               ['review', 'Revue des contenus'],
               ['video', 'Montage vidéo'],
@@ -124,6 +127,8 @@ export function App() {
       {view === 'calendar' && <CalendarView />}
 
       {view === 'news' && <NewsView />}
+
+      {view === 'analytics' && <AnalyticsView />}
 
       {view === 'review' && <ReviewView />}
 

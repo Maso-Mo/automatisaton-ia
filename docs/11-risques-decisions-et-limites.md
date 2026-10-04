@@ -32,7 +32,7 @@ Conséquences — ce que cela coûte, ce que cela interdit, ce qu'il faudra assu
 | État | Où elle vit | Combien de temps elle est valable |
 |---|---|---|
 | **Prise** (verrouillée) | §2 de ce document, + le document qui la détaille | Jusqu'à ce qu'une décision de remplacement explicite la remplace |
-| **Ouverte** | §3 (D2 à D4 et D6 ; D1 et D5 restent visibles mais sont tranchées) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
+| **Ouverte** | §3 (D2 et D3 ; D1, D4, D5 et D6 restent visibles mais sont tranchées) | Jusqu'à l'étape du [plan](10-plan-de-developpement-12-etapes.md) qui la requiert |
 | **Refusée** | §6 (« ce qui doit attendre ») | Jusqu'à sa condition de réexamen, écrite noir sur blanc |
 
 **Une décision n'est jamais supprimée.** Une décision remplacée reste visible avec la mention
@@ -189,20 +189,20 @@ Source : [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-e
 
 ---
 
-## 3. Les décisions D1 à D6 (D1 et D5 tranchées, D2 à D4 et D6 ouvertes)
+## 3. Les décisions D1 à D6 (D1, D4, D5 et D6 tranchées ; D2 et D3 ouvertes)
 
 Ces six décisions viennent de [`02-architecture.md`](02-architecture.md) §15. D1 a été tranchée à
-l'étape 5 et D5 à l'étape 10 ; les autres restent ouvertes jusqu'à disposer de leur mesure. Chacune indique
-l'étape qui la requiert et le **critère** qui permettra de choisir.
+l'étape 5, D5 à l'étape 10, puis D4 et D6 à l'étape 11 ; D2 et D3 restent ouvertes jusqu'à
+disposer de leur mesure. Chacune indique l'étape qui la requiert et le **critère** qui permettra de choisir.
 
 | # | Décision | Étape | Option A | Option B | Ce qui tranchera |
 |---|---|---|---|---|---|
 | D1 | Nombre de plateformes en V1 | 5 | **Tranchée : 4 en niveau C** | LinkedIn + Reddit + TikTok + YouTube | Le connecteur manuel commun a rendu les quatre conformes sans quatre API |
 | D2 | Modèle de transcription par défaut | 3 | `small` (rapide, moins précis) | `medium` (plus lent, plus juste) | Le résultat sur 20 transcriptions réelles, chronométré |
 | D3 | Adaptation multi-plateformes | 6 | Réécriture LLM soumise à validation | L'utilisateur réécrit lui-même | La qualité observée à l'étape 4 sur des contenus réels |
-| D4 | Fréquence de collecte analytics | 8 | Quotidien | Toutes les 6 h | Les quotas réels de l'API et l'utilité d'une fraîcheur de 6 h |
+| D4 | Fréquence de collecte analytics | 11 | **Tranchée : quotidien + manuel** | Toutes les 6 h | Aucune capacité API analytics acquise ne justifie 4× les appels |
 | D5 | Sauvegarde des médias volumineux | 10 | **Tranchée : base et médias séparés** | Snapshot complet | Les médias immuables et non bornés ne doivent pas ralentir les snapshots SQLite fréquents |
-| D6 | Mode « démo » avec données fictives | 11 | Oui (démontrable à un tiers) | Non (charge de travail) | Le temps restant et l'existence d'un besoin de démonstration |
+| D6 | Mode « démo » avec données fictives | 11 | Oui (démontrable à un tiers) | **Tranchée : non** | Aucun besoin tiers démontré ; ne pas confondre chiffres fictifs et mesures |
 
 ### 3.1 D1 — Nombre exact de plateformes de la V1
 
@@ -248,7 +248,7 @@ l'étape qui la requiert et le **critère** qui permettra de choisir.
 | **Option A — quotidien** | Une collecte par jour et par plateforme : lisible, sobre, suffisant pour un cycle de publication hebdomadaire. Conséquence : pas de réaction possible sur les premières heures d'une publication |
 | **Option B — toutes les 6 h** | Détecte les décollages rapides. Conséquence : 4× le nombre d'appels, des quotas atteints plus vite, et une précision sur les données qui dépend des fenêtres réelles de chaque API ⚠️ |
 | **Option C — quotidien + rafale sur 24 h après publication** | Le meilleur des deux mondes, mais deux mécanismes de planification à écrire et à tester |
-| **Décision** | **Ouverte** |
+| **Décision** | **Option A : quotidien par défaut**, plus collecte/saisie manuelle à la demande. Les snapshots restent multi-instants ; seule l'automatisation est quotidienne. |
 | **Critère** | Les quotas réels de l'API des plateformes déployées, mesurés à l'étape 8. Si le plafond quotidien tolère 4 appels sans risque de suspension, l'option B passe devant |
 | **À consigner dans** | Ce document, §2 (la décision y est ajoutée le jour où elle est tranchée), avec les quotas relevés |
 
@@ -272,7 +272,7 @@ l'étape qui la requiert et le **critère** qui permettra de choisir.
 | **Option A — mode démo** | Le produit est présentable à un tiers en cinq minutes. Conséquence : un jeu de données à maintenir à chaque évolution du schéma, et un risque de confusion avec les données réelles |
 | **Option B — pas de mode démo** | Aucune charge de travail supplémentaire, aucune confusion possible. Conséquence : toute présentation exige d'avoir publié pour de vrai, ce qui n'est pas toujours possible |
 | **Option C — projet de démonstration créé par commande, données réelles factices** | Plus simple qu'un mode complet : un script qui remplit un projet avec des contenus plausibles. Conséquence : le script doit être mis à jour à chaque migration, mais il ne s'exécute que sur demande |
-| **Décision** | **Ouverte** |
+| **Décision** | **Option B : pas de mode démo.** Les datasets artificiels restent exclusivement dans les tests temporaires et ne peuvent pas apparaître comme mesures produit. |
 | **Critère** | Le temps restant à l'étape 11 et l'existence réelle d'un besoin de démonstration à un tiers. **Par défaut : non** — une décision ouverte qui ne se tranche pas retombe sur l'option la moins coûteuse |
 | **À consigner dans** | Ce document, §2 (la décision y est ajoutée le jour où elle est tranchée), avec la raison de l'abandon ou de la mise en œuvre |
 
@@ -455,18 +455,18 @@ venir : un risque à impact 3 dont le signal est facile à rater.
 | **Hallucination factuelle validée** | Un fait erroné publié, ou un `risk='eleve'` approuvé sans vérification | Revue de la porte de sortie (le déclencheur en base), et non du prompt : c'est la porte qui a manqué |
 | **Dérive du budget d'appels LLM** | Deux semaines consécutives au plafond, ou un écart de plus de 20 % avec l'estimation | Passage en mode économie, revue de la taille des contextes envoyés, puis choix mesuré du modèle par agent |
 
-### 7.4 D1 et D5 tranchées, quatre décisions encore ouvertes
+### 7.4 D1, D4, D5 et D6 tranchées, deux décisions encore ouvertes
 
 | # | Décision | Échéance | Critère (rappel) |
 |---|---|---|---|
 | D1 | Nombre de plateformes de la V1 | **Tranchée à l'étape 5** | 4 plateformes, niveau C commun |
 | D2 | Modèle de transcription par défaut | Étape 3 | 20 transcriptions réelles, chronométrées et corrigées |
 | D3 | Adaptation multi-plateformes assistée ou manuelle | Étape 6 (mesurée à l'étape 4) | Comparaison côte à côte avec un contenu écrit à la main |
-| D4 | Fréquence de collecte des statistiques | Étape 8 | Les quotas réels observés sur les API déployées |
+| D4 | Fréquence de collecte des statistiques | **Tranchée à l'étape 11** | Quotidien par défaut + manuel ; aucune API analytics acquise |
 | D5 | Sauvegarde : un bloc ou deux | **Tranchée à l'étape 10** | Base et médias séparés ; snapshots SQLite fréquents, médias incrémentaux |
-| D6 | Mode démonstration | Étape 11 | Le temps restant et un besoin de démonstration réel (défaut : non) |
+| D6 | Mode démonstration | **Tranchée à l'étape 11** | Non ; aucun besoin tiers démontré, pas de chiffres fictifs en produit |
 
-**D2 à D4 et D6 ne doivent pas être tranchées sans leur mesure.** Ce serait choisir au hasard, puis
+**D2 et D3 ne doivent pas être tranchées sans leur mesure.** Ce serait choisir au hasard, puis
 défendre le hasard.
 
 ### 7.5 Trois questions directes
@@ -512,8 +512,6 @@ existe, et qu'il peut arrêter le projet.
 [`09-tests-et-qualite.md`](09-tests-et-qualite.md) ·
 [`10-plan-de-developpement-12-etapes.md`](10-plan-de-developpement-12-etapes.md) ·
 [`README.md`](README.md)
-
-
 
 
 

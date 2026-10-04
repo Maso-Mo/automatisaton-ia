@@ -72,6 +72,7 @@ export interface VideoFeatureDeps {
    * calculé en code. La signature le dit : `undefined` est un cas normal.
    */
   planner?(): MediaPlannerAgentLike | undefined;
+  performanceGuidance?(projectId: string, target: string): string[];
   /** La file, en **écriture seule** : l'API n'exécute rien. */
   queue: Pick<Queue, 'enqueue'>;
   logger: AppLogger;
@@ -424,6 +425,8 @@ export async function proposeVideoPlan(
           },
           maxClipMs: deps.maxClipMs,
           targetLabel: content.target,
+          performanceGuidance:
+            deps.performanceGuidance?.(content.projectId, content.target).slice(0, 4) ?? [],
         },
         {
           callContext: {

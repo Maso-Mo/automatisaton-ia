@@ -3,9 +3,14 @@ import { isAbsolute, resolve } from 'node:path';
 import {
   applyMigrations,
   createConversationStore,
+  createContentFeatureStore,
   createEditorialStore,
+  createExternalContentStore,
+  createLearningsStore,
   createMediaStore,
+  createMetricsStore,
   createNewsStore,
+  createPerformancePatternStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -17,6 +22,7 @@ import {
 } from '@aia/database';
 import {
   PUBLICATION_TASK,
+  PerformanceAdvisor,
   createBudgetPort,
   evaluateBudgetBrake,
   loadScopedBudgetLimits,
@@ -32,6 +38,7 @@ import {
 } from '@aia/config';
 import { createLogger, type AppLogger } from '@aia/observability';
 import {
+  COLLECT_METRICS_JOB,
   PUBLISH_CONTENT_JOB,
   COLLECT_NEWS_JOB,
   createJobRegistry,
@@ -52,6 +59,7 @@ import {
   createSystemRandom,
   usdToMicro,
   uuidv7,
+  contentTargetSpec,
   type Clock,
   type PlatformId,
 } from '@aia/shared';
@@ -89,6 +97,12 @@ import {
 } from './handlers/publish-content';
 import { createRenderVideoHandler } from './handlers/render-video';
 import { createTranscribeMediaHandler } from './handlers/transcribe-media';
+import {
+  createAnalyzePerformanceHandler,
+  createCollectMetricsHandler,
+  createExtractContentFeaturesHandler,
+  createRebuildPatternsHandler,
+} from './handlers/analytics';
 import { createSemaphore } from './features/semaphore';
 import { createNoopHandler, createScriptedProviderFactory } from './handlers/noop';
 import type { WriterProviderFactory } from './features/platform-writer';
@@ -389,6 +403,8 @@ export function buildWorker(
     clock,
     newId: () => uuidv7(clock.nowMs()),
   };
+  const analyticsPatterns = createPerformancePatternStore(handle, () => clock.nowMs());
+  const performanceAdvisor = new PerformanceAdvisor();
 
   registry.register({
     ...generateContentSpec,
@@ -402,6 +418,34 @@ export function buildWorker(
         model: llmModelFor(config.env, 'standard'),
         temperature: PLATFORM_WRITER_TEMPERATURE,
         createProvider: createWriterProviderFactory({ config, clock, logger, recorder, budget }),
+      },
+      performanceGuidance: (projectId, targets) => {
+        const rows = analyticsPatterns.listByProject(projectId);
+        return targets
+          .flatMap((target) => {
+            const spec = contentTargetSpec(target);
+            return performanceAdvisor.guidance(
+              performanceAdvisor.advise({
+                platform: spec.platform,
+                contentType: target,
+                patterns: rows.map((row) => ({
+                  id: row.id,
+                  platform: row.platform,
+                  niche: row.niche,
+                  contentType: row.content_type,
+                  feature: row.value,
+                  dimension: row.dimension,
+                  observedEffectPercent: row.delta_percent,
+                  confidenceX100: row.confidence_x100,
+                  sampleSize: row.sample_size,
+                  status: row.status as 'EXPERIMENTAL' | 'LIKELY' | 'SUPPORTED' | 'REJECTED',
+                })),
+                limit: 2,
+              }),
+              2,
+            );
+          })
+          .slice(0, 4);
       },
     }),
   });
@@ -564,6 +608,69 @@ export function buildWorker(
     return connector;
   };
 
+  const metrics = createMetricsStore(handle, () => clock.nowMs());
+  const features = createContentFeatureStore(handle, () => clock.nowMs());
+  const external = createExternalContentStore(handle, () => clock.nowMs());
+  const patterns = analyticsPatterns;
+  const learnings = createLearningsStore(handle, () => clock.nowMs());
+
+  registry.register(
+    createCollectMetricsHandler({
+      metrics,
+      publications,
+      connector: (publication) => {
+        const account = publications.getAccount(publication.platformAccountId);
+        const connector = apiConnectorFor(publication.platform);
+        if (!account || !connector || account.connectionState !== 'connected') return null;
+        const capabilities = account.capabilities as { analytics?: boolean };
+        return capabilities.analytics ? connector : null;
+      },
+      clock,
+    }),
+  );
+  registry.register(createAnalyzePerformanceHandler({ metrics, publications }));
+  registry.register(
+    createExtractContentFeaturesHandler({
+      features,
+      external,
+      source: {
+        publication: (id) => {
+          const publication = publications.getPublication(id);
+          if (!publication) return null;
+          const item = editorialPorts.store.getContentItem(publication.contentItemId);
+          const version = editorialPorts.store.getVersion(publication.contentVersionId);
+          if (!item || !version) return null;
+          const project = memoryPorts.store.projects.byId(publication.projectId);
+          const sourceAsset = version.mediaAssetIds
+            .map((assetId) => media.asset(assetId))
+            .find((asset) => asset?.kind === 'video');
+          const transcript = sourceAsset ? media.transcriptForAsset(sourceAsset.id) : null;
+          return {
+            projectId: publication.projectId,
+            publicationId: publication.id,
+            contentVersionId: version.id,
+            platform: publication.platform,
+            niche: project?.positioning ?? null,
+            contentType: item.target,
+            title: version.title,
+            hook: version.hook,
+            body: version.body,
+            durationMs: sourceAsset?.durationMs ?? null,
+            fps: sourceAsset?.fps ?? null,
+            width: sourceAsset?.width ?? null,
+            height: sourceAsset?.height ?? null,
+            subtitleGenerated: null,
+            transcriptSegments: transcript?.segments ?? [],
+          };
+        },
+      },
+      clock,
+    }),
+  );
+  registry.register(
+    createRebuildPatternsHandler({ metrics, features, external, patterns, learnings, clock }),
+  );
+
   registry.register(
     createPublishContentHandler({
       publications,
@@ -672,10 +779,24 @@ export function buildWorker(
     offline: config.env.OFFLINE_MODE,
     promoteCalendar: (nowMs) => scheduling.promoteDue(nowMs, CALENDAR_LATE_TOLERANCE_MS),
     enqueueRecurring: async (nowMs) => {
+      let enqueued = 0;
       const bucket = new Date(Math.floor(nowMs / 3_600_000) * 3_600_000).toISOString();
-      if (!news.claimCollectionCycle(bucket)) return 0;
-      await queue.enqueue(COLLECT_NEWS_JOB, {}, { dedupeKey: `collect-news-cycle:${bucket}` });
-      return 1;
+      if (news.claimCollectionCycle(bucket)) {
+        await queue.enqueue(COLLECT_NEWS_JOB, {}, { dedupeKey: `collect-news-cycle:${bucket}` });
+        enqueued += 1;
+      }
+      const dailyBucket = new Date(nowMs).toISOString().slice(0, 10);
+      if (metrics.claimCollectionCycle(dailyBucket)) {
+        for (const project of memoryPorts.store.projects.list({ statuses: ['active'] })) {
+          await queue.enqueue(
+            COLLECT_METRICS_JOB,
+            { projectId: project.id },
+            { projectId: project.id, dedupeKey: `collect-metrics:${project.id}:${dailyBucket}` },
+          );
+          enqueued += 1;
+        }
+      }
+      return enqueued;
     },
   });
 

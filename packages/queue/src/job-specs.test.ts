@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { generateContentSpec } from './job-specs';
+import {
+  analyzePerformanceSpec,
+  collectMetricsSpec,
+  extractContentFeaturesSpec,
+  generateContentSpec,
+  rebuildPatternsSpec,
+} from './job-specs';
 
 describe('déduplication des générations', () => {
   it('ne perd pas une régénération ciblée lorsqu’une génération initiale mono-cible existe', () => {
@@ -22,5 +28,20 @@ describe('déduplication des générations', () => {
     expect(initial).not.toBe(regenerated);
     expect(initial).toBe('content:initial:c1');
     expect(regenerated).toBe('content:regenerated:c1');
+  });
+});
+
+describe('jobs analytics', () => {
+  it('sont idempotents, retryables et dédupliqués par portée', () => {
+    for (const spec of [
+      collectMetricsSpec,
+      analyzePerformanceSpec,
+      extractContentFeaturesSpec,
+      rebuildPatternsSpec,
+    ]) {
+      expect(spec.idempotent).toBe(true);
+      expect(spec.maxAttempts).toBeGreaterThan(1);
+      expect(spec.dedupeKey).toBeTypeOf('function');
+    }
   });
 });

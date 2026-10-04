@@ -52,6 +52,11 @@
     providers RSS/Atom/JSON, collecte reprenable, déduplication et scoring locaux,
     vérification, suggestions, proposition calendrier à validation humaine, SSE,
     budget nul par défaut et parcours E2E local.
+22. **`21-mise-en-oeuvre-etape-11.md`** — analytics et apprentissage : snapshots
+    multi-instants, normalisation et classification relatives, Viral Pattern Engine
+    anti-biais, exemples externes minimaux, confidence/learnings, PerformanceAdvisor,
+    guidance writer/media, propositions calendrier humaines et interfaces Analytics /
+    Viral Research.
 
 
 ## Règles de rédaction

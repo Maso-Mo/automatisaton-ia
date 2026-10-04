@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { projects } from './projects';
 import { publications } from './publishing';
+import { contentVersions } from './editorial';
 
 /**
  * Analytics et plafonds — les **quatre tables de l'étape 8** (docs/10 §4.8) :
@@ -90,6 +91,9 @@ export const learnings = sqliteTable(
     sample_size: integer().notNull(),
     /** 'faible'|'moyenne'|'forte' — `faible` par défaut (règle 2). */
     confidence: text().notNull().default('faible'),
+    confidence_x100: integer().notNull().default(0),
+    niche: text(),
+    content_type: text(),
     /** Un apprentissage n'entre dans un prompt que si revu ou de confiance forte (règle 4). */
     human_reviewed: integer({ mode: 'boolean' }).notNull().default(false),
     active: integer({ mode: 'boolean' }).notNull().default(true),
@@ -111,9 +115,8 @@ export const learnings = sqliteTable(
  * Une ligne par **publication et par jour** (docs/03 §12.1). Jamais d'écrasement
  * destructeur : les mesures s'ajoutent, ce qui permet de tracer une courbe.
  *
- * `uq_metric_day` est ce qui rend la collecte idempotente : si elle tourne deux
- * fois dans la journée, elle met à jour le point du jour au lieu d'en créer un
- * second — sinon toutes les courbes seraient faussées par des doublons.
+ * `uq_metric_snapshot` rend une collecte rejouée au même instant idempotente,
+ * sans écraser T+1 h par T+6 h le même jour : la vitesse reste mesurable.
  *
  * `engagement_rate_x100` est **stocké**, pas calculé à la volée : la formule
  * dépend de la plateforme (impressions, reach ou vues au dénominateur). Le
@@ -157,12 +160,26 @@ export const metricSnapshots = sqliteTable(
     /** ×100 ; calculé par le collecteur puis stocké pour la stabilité historique. */
     engagement_rate_x100: integer(),
     profile_visits: integer(),
+    /** Taille du compte au moment de la publication ; `NULL` reste inconnu. */
+    followers_at_publish: integer(),
+    /** Métriques propres à la plateforme, conservées sans les aplatir ni les inventer. */
+    platform_metrics_json: text(),
+    collection_method: text().notNull().default('manual_entry'),
+    provenance: text().notNull().default('user'),
+    engagement_rate_x10000: integer(),
+    share_rate_x10000: integer(),
+    save_rate_x10000: integer(),
+    comment_rate_x10000: integer(),
+    ctr_x10000: integer(),
+    view_velocity_x100: integer(),
+    relative_performance_x100: integer(),
+    percentile_x100: integer(),
     /** Réponse brute de l'API, pour audit — sans jeton (docs/07 §9.1). */
     raw_json: text(),
     created_at: integer().notNull(),
   },
   (table) => [
-    uniqueIndex('uq_metric_day').on(table.publication_id, table.captured_date, table.source),
+    uniqueIndex('uq_metric_snapshot').on(table.publication_id, table.captured_at, table.source),
     index('idx_metrics_project_date').on(table.project_id, table.captured_date),
     index('idx_metrics_platform').on(table.platform, table.captured_date),
     check('chk_metrics_source', sql`${table.source} in ('api','manual','estimated')`),
@@ -179,6 +196,10 @@ export const metricSnapshots = sqliteTable(
         and (${table.comments} is null or ${table.comments} >= 0)
         and (${table.shares} is null or ${table.shares} >= 0)
         and (${table.saves} is null or ${table.saves} >= 0)`,
+    ),
+    check(
+      'chk_metrics_followers',
+      sql`${table.followers_at_publish} is null or ${table.followers_at_publish} >= 0`,
     ),
   ],
 );
@@ -202,7 +223,7 @@ export const performancePatterns = sqliteTable(
       .notNull()
       .references(() => projects.id),
     platform: text().notNull(),
-    /** 'hook_type'|'length'|'posting_hour'|'posting_weekday'|'topic'|'format'|'hashtag_count'|'has_media'|'has_video'|'structure' */
+    /** Dimension abstraite mesurée (hook, structure, longueur, CTA, vidéo ou publication). */
     dimension: text().notNull(),
     /** « hook sous forme de question » — la valeur observée, pas son interprétation. */
     value: text().notNull(),
@@ -215,6 +236,16 @@ export const performancePatterns = sqliteTable(
     baseline_x100: integer(),
     /** `(avg − baseline) / baseline × 100`. */
     delta_percent: integer(),
+    niche: text(),
+    content_type: text(),
+    observed_effect: text(),
+    positive_sample_size: integer().notNull().default(0),
+    baseline_sample_size: integer().notNull().default(0),
+    confidence_x100: integer().notNull().default(0),
+    evidence_json: text(),
+    status: text().notNull().default('EXPERIMENTAL'),
+    first_observed_at: integer(),
+    last_observed_at: integer(),
     computed_at: integer().notNull(),
     period_start: integer().notNull(),
     period_end: integer().notNull(),
@@ -236,9 +267,86 @@ export const performancePatterns = sqliteTable(
     ),
     check(
       'chk_patterns_dimension',
-      sql`${table.dimension} in ('hook_type','length','posting_hour','posting_weekday','topic','format','hashtag_count','has_media','has_video','structure')`,
+      sql`${table.dimension} in ('hook_type','length','posting_hour','posting_weekday','topic','format','hashtag_count','has_media','has_video','has_subtitles','structure','cta_type','technical_level','duration','visual_pace')`,
     ),
     check('chk_patterns_metric', sql`${table.metric} in ('engagement_rate','reach','saves')`),
     check('chk_patterns_sample_size', sql`${table.sample_size} > 0`),
+    check(
+      'chk_patterns_status',
+      sql`${table.status} in ('EXPERIMENTAL','LIKELY','SUPPORTED','REJECTED')`,
+    ),
+    check('chk_patterns_confidence', sql`${table.confidence_x100} between 0 and 100`),
+  ],
+);
+
+/** Exemple public fourni ou importé par l'utilisateur, sans copie du contenu tiers. */
+export const externalContentExamples = sqliteTable(
+  'external_content_examples',
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => projects.id),
+    platform: text().notNull(),
+    url: text().notNull(),
+    creator_name: text(),
+    published_at: integer(),
+    collected_at: integer().notNull(),
+    views: integer(),
+    likes: integer(),
+    comments: integer(),
+    shares: integer(),
+    followers: integer(),
+    duration_ms: integer(),
+    title: text().notNull(),
+    topic: text(),
+    extracted_features_json: text(),
+    provenance: text().notNull(),
+    confidence_x100: integer().notNull().default(50),
+    included: integer({ mode: 'boolean' }).notNull().default(true),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_external_example_url').on(table.project_id, table.url),
+    index('idx_external_example_project').on(table.project_id, table.platform, table.included),
+    check('chk_external_confidence', sql`${table.confidence_x100} between 0 and 100`),
+  ],
+);
+
+/** Caractéristiques abstraites d'un contenu interne ou externe, jamais son script tiers. */
+export const contentFeatureSets = sqliteTable(
+  'content_feature_sets',
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => projects.id),
+    publication_id: text().references(() => publications.id),
+    content_version_id: text().references(() => contentVersions.id),
+    external_example_id: text().references(() => externalContentExamples.id),
+    platform: text().notNull(),
+    niche: text(),
+    content_type: text().notNull(),
+    features_json: text().notNull(),
+    provenance: text().notNull(),
+    confidence_x100: integer().notNull().default(100),
+    experiment_key: text(),
+    experiment_variant: text(),
+    extraction_ms: integer().notNull().default(0),
+    included: integer({ mode: 'boolean' }).notNull().default(true),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_features_publication').on(table.publication_id),
+    uniqueIndex('uq_features_external').on(table.external_example_id),
+    index('idx_features_learning').on(table.project_id, table.platform, table.included),
+    check(
+      'chk_features_origin',
+      sql`(${table.publication_id} is not null and ${table.external_example_id} is null)
+        or (${table.publication_id} is null and ${table.external_example_id} is not null)`,
+    ),
+    check('chk_features_confidence', sql`${table.confidence_x100} between 0 and 100`),
   ],
 );

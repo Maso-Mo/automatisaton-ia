@@ -23,7 +23,14 @@ export * from './system';
 export * from './users';
 
 import { appSettings, llmProvidersConfig, users } from './users';
-import { budgetLimits, learnings, metricSnapshots, performancePatterns } from './analytics';
+import {
+  budgetLimits,
+  contentFeatureSets,
+  externalContentExamples,
+  learnings,
+  metricSnapshots,
+  performancePatterns,
+} from './analytics';
 import {
   audienceProfiles,
   projectFacts,
@@ -197,6 +204,14 @@ export const STEP_NINE_TABLE_NAMES: readonly string[] = [
 
 export const STEP_NINE_TABLES = [calendarSlots, calendarChangeProposals] as const;
 
+/** Recherche virale et caractéristiques abstraites ajoutées à l'étape 11. */
+export const STEP_ELEVEN_TABLE_NAMES: readonly string[] = [
+  'external_content_examples',
+  'content_feature_sets',
+];
+
+export const STEP_ELEVEN_TABLES = [externalContentExamples, contentFeatureSets] as const;
+
 /** Les deux tables éditoriales de l'étape 3, avec les autres : elles vivent dans `./editorial`. */
 export const STEP_THREE_EDITORIAL_TABLES = [contentSubjects, subjectAngles] as const;
 
@@ -220,4 +235,5 @@ export const REQUIRED_TABLE_NAMES: readonly string[] = [
   ...STEP_SEVEN_TABLE_NAMES,
   ...STEP_EIGHT_TABLE_NAMES,
   ...STEP_NINE_TABLE_NAMES,
+  ...STEP_ELEVEN_TABLE_NAMES,
 ];

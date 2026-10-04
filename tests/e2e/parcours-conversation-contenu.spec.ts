@@ -669,5 +669,82 @@ test.describe('parcours 1 — de l’entretien à la publication manuelle', () =
       expect(linkedinAfter?.item.state).toBe('published');
       expect(linkedinAfter?.version.body).toContain(DRAFT_BODY_FRAGMENT);
     });
+
+    await test.step('Analytics : snapshot personnel, analyse locale et raison visible', async () => {
+      const projectId = await projectIdByName(request, PROJECT.name);
+      const bundles = await contentBundles(request, projectId);
+      const linkedin = bundles.find((bundle) => bundle.item.target === 'linkedin_post');
+      const response = await request.get(
+        `/api/content/${encodeURIComponent(linkedin?.item.id ?? '')}/publications`,
+      );
+      const publication = (
+        (await response.json()) as { publications: Array<{ id: string; status: string }> }
+      ).publications.find((item) => item.status === 'published');
+      expect(publication).toBeDefined();
+
+      await openView(page, 'Analytics');
+      await selectByLabel(page, 'Projet Analytics', PROJECT.name);
+      await page.getByLabel('ID publication').fill(publication?.id ?? '');
+      await page.getByRole('spinbutton', { name: 'Vues', exact: true }).fill('4200');
+      await page.getByRole('spinbutton', { name: 'Likes', exact: true }).fill('210');
+      await page.getByRole('spinbutton', { name: 'Partages', exact: true }).fill('42');
+      await page.getByRole('button', { name: 'Enregistrer le snapshot et analyser' }).click();
+
+      await expect.poll(() => latestJobStatus(request, 'analyze_performance')).toBe('completed');
+      await expect
+        .poll(() => latestJobStatus(request, 'extract_content_features'))
+        .toBe('completed');
+      await expect(page.getByText(publication?.id ?? '')).toBeVisible();
+      await expect(page.getByText(/référence insuffisante/i).first()).toBeVisible();
+    });
+
+    await test.step('Viral Research : exemple public, baseline et pattern expérimental', async () => {
+      const projectId = await projectIdByName(request, PROJECT.name);
+
+      // Le premier exemple passe par l'interface ; les neuf autres simulent un
+      // import d'export plateforme, sans aucun appel réseau réel.
+      await page.getByLabel('URL publique').fill('https://example.test/viral/result-0');
+      await page.getByLabel('Titre descriptif').fill('Voici le résultat numéro 0');
+      await page.getByLabel('Vues (optionnel)').fill('20000');
+      await page.getByLabel('Abonnés (optionnel)').fill('100');
+      await page.getByRole('button', { name: 'Ajouter et analyser' }).click();
+      await expect(page.getByRole('link', { name: 'Voici le résultat numéro 0' })).toBeVisible();
+
+      for (let index = 1; index < 10; index += 1) {
+        const resultFirst = index < 5;
+        const imported = await request.post('/api/analytics/external', {
+          data: {
+            projectId,
+            platform: 'tiktok',
+            url: `https://example.test/viral/${resultFirst ? 'result' : 'question'}-${index}`,
+            title: resultFirst
+              ? `Voici le résultat numéro ${index}`
+              : `Pourquoi cette méthode numéro ${index} ?`,
+            views: resultFirst ? 20_000 : 10_000,
+            followers: 100,
+            provenance: 'export plateforme E2E',
+          },
+        });
+        expect(imported.ok()).toBe(true);
+      }
+
+      await expect
+        .poll(async () => {
+          const jobs = await request.get('/api/jobs?limit=50');
+          const values = (await jobs.json()) as {
+            jobs: Array<{ type: string; status: string }>;
+          };
+          return values.jobs.filter(
+            (job) => job.type === 'extract_content_features' && job.status !== 'completed',
+          ).length;
+        })
+        .toBe(0);
+
+      await page.getByRole('button', { name: 'Reconstruire les patterns' }).click();
+      await expect.poll(() => latestJobStatus(request, 'rebuild_patterns')).toBe('completed');
+      await expect(page.getByText('EXPERIMENTAL').first()).toBeVisible();
+      await expect(page.getByText(/observations · confiance/).first()).toBeVisible();
+      await expect(page.getByText(/positives contre .* baseline/).first()).toBeAttached();
+    });
   });
 });

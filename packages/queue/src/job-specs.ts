@@ -188,3 +188,79 @@ export const collectNewsSpec: JobSpec<CollectNewsInput> = {
   requiresNetwork: true,
   dedupeKey: (input) => `collect-news:${input.sourceId ?? 'due-sources'}`,
 };
+
+// Étape 11 : quatre jobs courts et ciblables. Les clés incluent la portée afin
+// qu'un redémarrage reprenne le calcul sans empiler deux analyses identiques.
+export const COLLECT_METRICS_JOB = 'collect_metrics';
+export const collectMetricsInputSchema = z.object({
+  projectId: z.string().min(1),
+  publicationId: z.string().min(1).optional(),
+});
+export type CollectMetricsInput = z.infer<typeof collectMetricsInputSchema>;
+export const collectMetricsSpec: JobSpec<CollectMetricsInput> = {
+  type: COLLECT_METRICS_JOB,
+  inputSchema: collectMetricsInputSchema,
+  maxAttempts: 3,
+  backoff: (attempt) => 60_000 * 2 ** (Math.max(1, attempt) - 1),
+  leaseMs: 2 * 60_000,
+  idempotent: true,
+  priority: 6,
+  requiresNetwork: true,
+  dedupeKey: (input) => `metrics:${input.publicationId ?? input.projectId}`,
+};
+
+export const ANALYZE_PERFORMANCE_JOB = 'analyze_performance';
+export const analyzePerformanceInputSchema = z.object({
+  projectId: z.string().min(1),
+  publicationId: z.string().min(1).optional(),
+});
+export type AnalyzePerformanceInput = z.infer<typeof analyzePerformanceInputSchema>;
+export const analyzePerformanceSpec: JobSpec<AnalyzePerformanceInput> = {
+  type: ANALYZE_PERFORMANCE_JOB,
+  inputSchema: analyzePerformanceInputSchema,
+  maxAttempts: 2,
+  backoff: () => 30_000,
+  leaseMs: 2 * 60_000,
+  idempotent: true,
+  priority: 7,
+  requiresNetwork: false,
+  dedupeKey: (input) => `analyze:${input.publicationId ?? input.projectId}`,
+};
+
+export const EXTRACT_CONTENT_FEATURES_JOB = 'extract_content_features';
+export const extractContentFeaturesInputSchema = z
+  .object({
+    projectId: z.string().min(1),
+    publicationId: z.string().min(1).optional(),
+    externalExampleId: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.publicationId) !== Boolean(value.externalExampleId), {
+    message: 'Fournir exactement une publication ou un exemple externe.',
+  });
+export type ExtractContentFeaturesInput = z.infer<typeof extractContentFeaturesInputSchema>;
+export const extractContentFeaturesSpec: JobSpec<ExtractContentFeaturesInput> = {
+  type: EXTRACT_CONTENT_FEATURES_JOB,
+  inputSchema: extractContentFeaturesInputSchema,
+  maxAttempts: 2,
+  backoff: () => 30_000,
+  leaseMs: 2 * 60_000,
+  idempotent: true,
+  priority: 8,
+  requiresNetwork: false,
+  dedupeKey: (input) => `features:${input.publicationId ?? `external:${input.externalExampleId}`}`,
+};
+
+export const REBUILD_PATTERNS_JOB = 'rebuild_patterns';
+export const rebuildPatternsInputSchema = z.object({ projectId: z.string().min(1) });
+export type RebuildPatternsInput = z.infer<typeof rebuildPatternsInputSchema>;
+export const rebuildPatternsSpec: JobSpec<RebuildPatternsInput> = {
+  type: REBUILD_PATTERNS_JOB,
+  inputSchema: rebuildPatternsInputSchema,
+  maxAttempts: 2,
+  backoff: () => 60_000,
+  leaseMs: 5 * 60_000,
+  idempotent: true,
+  priority: 9,
+  requiresNetwork: false,
+  dedupeKey: (input) => `patterns:${input.projectId}`,
+};

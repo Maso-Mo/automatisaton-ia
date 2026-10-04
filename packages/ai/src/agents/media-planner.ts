@@ -45,6 +45,8 @@ export interface MediaPlannerInput {
   maxClipMs: number;
   /** Libellé de la cible (« Short TikTok »…) : du contexte, jamais une consigne de format. */
   targetLabel?: string;
+  /** Conseils historiques ciblés, non contraignants et limités par l'orchestrateur. */
+  performanceGuidance?: readonly string[];
 }
 
 export const MEDIA_PLANNER_AGENT = 'media_planner';
@@ -77,6 +79,14 @@ export function buildMediaPlannerPrompt(input: MediaPlannerInput): string {
     } · ${input.video.hasAudio ? 'avec audio' : 'sans audio'}`,
   );
   parts.push(`Durée maximale de l’extrait : ${seconds(input.maxClipMs)} s`);
+
+  if (input.performanceGuidance && input.performanceGuidance.length > 0) {
+    parts.push('', '# PERFORMANCE GUIDANCE');
+    parts.push(
+      'Associations observées, à considérer sans jamais dépasser les contraintes ci-dessous :',
+    );
+    parts.push(...input.performanceGuidance.slice(0, 4).map((item) => `- ${item}`));
+  }
 
   parts.push('', '# Texte approuvé du contenu');
   parts.push(

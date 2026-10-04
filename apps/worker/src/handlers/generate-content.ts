@@ -69,6 +69,7 @@ export interface GenerateContentHandlerDeps {
    * d'API, ni fournisseur : la racine de composition décide (docs/02 §5).
    */
   writer: Omit<PlatformWriterDeps, 'handle'>;
+  performanceGuidance?(projectId: string, targets: readonly ContentTarget[]): string[];
 }
 
 /** Ce qui s'est écrit pour une cible : le résultat visible d'un appel. */
@@ -377,8 +378,10 @@ export function createGenerateContentHandler(
       projectId: input.projectId,
       targets,
     });
+    const performanceGuidance = deps.performanceGuidance?.(input.projectId, targets) ?? [];
     const writerInput = buildWriterInput(context, memoryPack, {
       targets,
+      performanceGuidance,
       ...(userRetries.length > 0 ? { retries: userRetries } : {}),
     });
     const estimate = bundle.agent.estimateTokens(writerInput);
@@ -496,7 +499,11 @@ export function createGenerateContentHandler(
         targets: retryTargets,
       });
       const retryResult = await retryBundle.agent.run(
-        buildWriterInput(context, memoryPack, { targets: retryTargets, retries }),
+        buildWriterInput(context, memoryPack, {
+          targets: retryTargets,
+          retries,
+          performanceGuidance: deps.performanceGuidance?.(input.projectId, retryTargets) ?? [],
+        }),
         {
           callContext: {
             projectId: input.projectId,

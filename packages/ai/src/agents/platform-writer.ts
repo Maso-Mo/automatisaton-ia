@@ -95,6 +95,8 @@ export interface PlatformWriterInput {
   /** Les cibles demandées. Elles sont triées ici, jamais par l'appelant. */
   targets: readonly ContentTarget[];
   retries?: readonly PlatformWriterRetry[];
+  /** Associations historiques pertinentes, bornées par l'appelant ; jamais des obligations. */
+  performanceGuidance?: readonly string[];
 }
 
 export interface PlatformWriterAgentOptions {
@@ -213,6 +215,14 @@ export function buildPlatformWriterPrompt(
     lines.push(...input.angle.evidence.map((item) => `- ${item}`));
   }
   lines.push(`Pourquoi cet angle : ${input.angle.rationale}`);
+
+  if (input.performanceGuidance && input.performanceGuidance.length > 0) {
+    lines.push('', '## PERFORMANCE GUIDANCE');
+    lines.push(
+      'Recommandations issues d’associations observées : utilise-les si elles servent le sujet, sans les traiter comme des obligations ni comme des causalités.',
+    );
+    lines.push(...input.performanceGuidance.slice(0, 4).map((item) => `- ${item}`));
+  }
 
   const retries = input.retries ?? [];
   for (const retry of retries) {

@@ -5,7 +5,7 @@
 > **La documentation de conception est la source de vérité** : le produit final, son architecture,
 > son modèle de données, ses pipelines, sa stratégie de tests et son plan en 12 étapes.
 >
-> **Les étapes 1 à 5 sont implémentées** :
+> **Les étapes 1 à 11 sont implémentées** :
 > - **étape 1** (fondations exécutables) : monorepo pnpm, API Fastify, worker, base SQLite migrée,
 >   file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic ;
 > - **étape 2** (mémoire des projets) : projets, faits typés avec états de vérification, sélection
@@ -19,9 +19,14 @@
 > - **étape 5** (qualité et publication manuelle) : critique et vérification factuelle séparées,
 >   dashboard de revue, comptes aux jetons chiffrés, paquets manuels niveau C pour LinkedIn,
 >   Reddit, TikTok et YouTube, puis statut publié traçable avec le texte exact.
+> - **étapes 6 à 10** : transcription locale, rendu vidéo FFmpeg, publication API idempotente et
+>   budgets, calendrier éditorial, puis veille vérifiable et adaptation supervisée ;
+> - **étape 11** : snapshots de métriques, normalisation relative, Viral Pattern Engine avec
+>   baseline anti-biais, learnings persistants, recommandations explicables et Viral Research.
 >
-> Le produit ne publie par **aucune API** : la publication est volontairement manuelle et suivie.
-> L'entrée média, la planification et les niveaux A/B arrivent aux étapes suivantes.
+> La publication API n'est utilisée que lorsqu'une capacité officielle est réellement acquise ;
+> sinon le paquet manuel reste disponible. Toute publication et tout déplacement de calendrier
+> gardent une validation humaine.
 >
 > Règle issue du cahier des charges (§46 — Priorité absolue) : *ne pas commencer à coder avant
 > d'avoir l'architecture, le modèle de données, les flux, les responsabilités, les interfaces
@@ -32,7 +37,8 @@
 > Comptes rendus d'exécution : **[docs/12-mise-en-oeuvre-etape-1.md](docs/12-mise-en-oeuvre-etape-1.md)**,
 > **[docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md)** et
 > **[docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md)** et
-> **[docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md)**.
+> **[docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md)** et
+> **[docs/21-mise-en-oeuvre-etape-11.md](docs/21-mise-en-oeuvre-etape-11.md)**.
 
 ---
 
@@ -97,10 +103,11 @@ techniquement.
 | [docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md) | **Compte rendu d'exécution de l'étape 3** : conversation IA et fiche maître — décisions (M1 à M16), ce qui n'a pas été construit, tests, points ouverts |
 | [docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md) | **Compte rendu d'exécution de l'étape 4** : génération éditoriale — décisions (M1 à M20), ce qui n'a pas été construit, tests, points ouverts |
 | [docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md) | **Compte rendu d'exécution de l'étape 5** : qualité, dashboard et publication manuelle — décisions, limites vérifiées, tests et périmètre |
+| [docs/21-mise-en-oeuvre-etape-11.md](docs/21-mise-en-oeuvre-etape-11.md) | **Compte rendu d'exécution de l'étape 11** : analytics relatifs, Viral Pattern Engine, anti-biais, learnings et recommandations explicables |
 
 ---
 
-## 3bis. Démarrage rapide (étapes 1 à 5)
+## 3bis. Démarrage rapide (étapes 1 à 11)
 
 ```bash
 pnpm install                  # dépendances (better-sqlite3 compilé localement)
@@ -110,28 +117,34 @@ openssl rand -hex 32          #   ENCRYPTION_KEY
 # puis DEEPSEEK_API_KEY=sk-... pour que la conversation fonctionne réellement
 
 pnpm check:env                # état de l'environnement (bloquant ou dégradé)
-pnpm db:migrate               # crée data/app.db et les 32 tables des étapes 1 à 5
+pnpm db:migrate               # crée data/app.db et les 45 tables attendues
 pnpm dev                      # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
 
 pnpm job:noop -- --wait       # sonde de bout en bout : statut, événements, coût calculé
 pnpm verify                   # types, lint, tests, migrations, frontières, canari, environnement
 ```
 
-L'interface (`http://127.0.0.1:5173`) a cinq onglets :
+L'interface (`http://127.0.0.1:5173`) a dix onglets :
 
 - **Conversation** : on discute par texte avec l'assistant, on accepte ou refuse les écritures
   proposées (chacune cite vos mots), et on relit puis valide la fiche maître ;
 - **Projets** : la mémoire structurée — projets, faits typés, contexte déterministe ;
 - **Plan éditorial** : sujets, angles, cibles et génération suivie en temps réel ;
 - **Revue des contenus** : contrôles, versions, approbation et paquet manuel ;
+- **Montage vidéo** : import, transcription, plan, rendu FFmpeg, aperçu et validation ;
+- **Aujourd'hui / Calendrier** : échéances, planification et propositions humaines ;
+- **News / Veille** : collecte vérifiable, score expliqué et suggestions ;
+- **Analytics** : snapshots, performances relatives, patterns et Viral Research ;
 - **Diagnostic** : base migrée, worker actif, clé IA présente, budget du jour.
 
 Sans clé DeepSeek, le diagnostic et les fonctions locales démarrent, mais les appels IA réels
 échouent explicitement ; les tests et l'E2E utilisent des fournisseurs scriptés. La publication
-est manuelle et ne dépend d'aucune API externe. Voir [docs/15](docs/15-mise-en-oeuvre-etape-5.md).
+peut rester manuelle et ne dépend d'aucune API externe. Voir
+[docs/21](docs/21-mise-en-oeuvre-etape-11.md).
 
-Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg et whisper ne sont **pas** requis à ce stade
-(leur absence est signalée « dégradé », jamais bloquante).
+Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg/ffprobe et whisper.cpp sont optionnels pour les
+parcours texte/analytics ; leur absence est signalée « dégradé » et bloque seulement la fonction
+média concernée.
 
 ---
 
@@ -175,13 +188,13 @@ Détail complet et justifications : [docs/02-architecture.md](docs/02-architectu
 | 2 | Conversation et mémoire — **implémentée** (mémoire à l'étape 2, conversation et fiche maître à l'étape 3) | **V1** |
 | 3 | Conversation IA et fiche maître — **implémentée** (ce dépôt) ; « Sujets, angles et entrée média » du plan reste à faire | **V1** |
 | 4 | Génération éditoriale — **implémentée** (sujets, angles, écriture multi-plateformes ; l'entrée média du plan reste à faire) | **V1** |
-| 5 | Qualité, comptes et publication manuelle | **V1** |
-| 6 | Médias et sauvegarde | **V2** |
-| 7 | Vidéo | **V2** |
-| 8 | Publication par API et budget | **V2** |
-| 9 | Calendrier et planification | **V2** |
-| 10 | Veille et exploitation continue | **V3** |
-| 11 | Analytics et apprentissage | **V3** |
+| 5 | Qualité, comptes et publication manuelle — **implémentée** | **V1** |
+| 6 | Médias et sauvegarde — **implémentée** | **V2** |
+| 7 | Vidéo — **implémentée** | **V2** |
+| 8 | Publication par API et budget — **implémentée** | **V2** |
+| 9 | Calendrier et planification — **implémentée** | **V2** |
+| 10 | Veille et exploitation continue — **implémentée** | **V3** |
+| 11 | Analytics et apprentissage — **implémentée** | **V3** |
 | 12 | Consolidation et portabilité | **V3** |
 
 > **Numérotation** : ce tableau suit les titres de

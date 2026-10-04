@@ -123,6 +123,7 @@ export interface WriterRequest {
   targets: readonly ContentTarget[];
   /** Les réécritures ciblées, avec le reproche et le texte précédent. */
   retries?: readonly PlatformWriterRetry[];
+  performanceGuidance?: readonly string[];
 }
 
 export function buildWriterInput(
@@ -135,6 +136,9 @@ export function buildWriterInput(
     subject: writerSubject(context.subject),
     angle: writerAngle(context.angle),
     targets: request.targets,
+    ...(request.performanceGuidance && request.performanceGuidance.length > 0
+      ? { performanceGuidance: request.performanceGuidance.slice(0, 4) }
+      : {}),
     ...(request.retries && request.retries.length > 0 ? { retries: request.retries } : {}),
   };
 }

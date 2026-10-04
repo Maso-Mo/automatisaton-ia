@@ -11,3 +11,7 @@ export * from './budget-guard';
 export * from './budget-port';
 export * from './limits';
 export * from './spend';
+export * from './performance';
+export * from './features';
+export * from './viral-pattern-engine';
+export * from './advisor';

@@ -8,12 +8,17 @@ import {
   syncPrompts,
   withRecording,
 } from '@aia/ai';
-import { createBudgetPort } from '@aia/analytics';
+import { PerformanceAdvisor, createBudgetPort } from '@aia/analytics';
 import {
   createConversationStore,
+  createContentFeatureStore,
   createEditorialStore,
+  createExternalContentStore,
+  createLearningsStore,
   createMediaStore,
+  createMetricsStore,
   createNewsStore,
+  createPerformancePatternStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -51,6 +56,12 @@ import { createCollectNewsHandler } from '../../../apps/worker/src/handlers/coll
 import { createPublishContentHandler } from '../../../apps/worker/src/handlers/publish-content';
 import { createRenderVideoHandler } from '../../../apps/worker/src/handlers/render-video';
 import { createTranscribeMediaHandler } from '../../../apps/worker/src/handlers/transcribe-media';
+import {
+  createAnalyzePerformanceHandler,
+  createCollectMetricsHandler,
+  createExtractContentFeaturesHandler,
+  createRebuildPatternsHandler,
+} from '../../../apps/worker/src/handlers/analytics';
 import { createSemaphore } from '../../../apps/worker/src/features/semaphore';
 import { createWorkerLoop } from '../../../apps/worker/src/loop';
 import type { WriterProviderFactory } from '../../../apps/worker/src/features/platform-writer';
@@ -281,6 +292,8 @@ const createProvider: WriterProviderFactory = (ctx, request) => {
 };
 
 const registry = createJobRegistry();
+const analyticsPatterns = createPerformancePatternStore(handle, () => clock.nowMs());
+const advisor = new PerformanceAdvisor();
 
 /** Flux RSS local et déterministe : le parcours de veille ne touche jamais Internet. */
 const news = createNewsStore(handle, () => clock.nowMs());
@@ -330,6 +343,25 @@ registry.register({
       temperature: PLATFORM_WRITER_TEMPERATURE,
       createProvider,
     },
+    performanceGuidance: (projectId, targets) =>
+      advisor.guidance(
+        advisor.advise({
+          platform: targets[0]?.split('_')[0] ?? 'linkedin',
+          contentType: targets[0],
+          patterns: analyticsPatterns.listByProject(projectId).map((row) => ({
+            id: row.id,
+            platform: row.platform,
+            niche: row.niche,
+            contentType: row.content_type,
+            feature: row.value,
+            dimension: row.dimension,
+            observedEffectPercent: row.delta_percent,
+            confidenceX100: row.confidence_x100,
+            sampleSize: row.sample_size,
+            status: row.status as 'EXPERIMENTAL' | 'LIKELY' | 'SUPPORTED' | 'REJECTED',
+          })),
+        }),
+      ),
   }),
 });
 
@@ -385,6 +417,65 @@ const queue = new SqliteQueue({
 const publications = createPublishingStore(handle, () => clock.nowMs());
 const scheduling = createSchedulingStore(handle, () => clock.nowMs());
 const simulatedPublishing = createSimulatedConnector({ platform: 'linkedin', level: 'A' });
+const analyticsMetrics = createMetricsStore(handle, () => clock.nowMs());
+const analyticsFeatures = createContentFeatureStore(handle, () => clock.nowMs());
+const analyticsExternal = createExternalContentStore(handle, () => clock.nowMs());
+const analyticsMedia = createMediaStore(handle, () => clock.nowMs());
+registry.register(
+  createCollectMetricsHandler({
+    metrics: analyticsMetrics,
+    publications,
+    connector: () => simulatedPublishing,
+    clock,
+  }),
+);
+registry.register(createAnalyzePerformanceHandler({ metrics: analyticsMetrics, publications }));
+registry.register(
+  createExtractContentFeaturesHandler({
+    features: analyticsFeatures,
+    external: analyticsExternal,
+    source: {
+      publication: (id) => {
+        const publication = publications.getPublication(id);
+        if (!publication) return null;
+        const item = ports.store.getContentItem(publication.contentItemId);
+        const version = ports.store.getVersion(publication.contentVersionId);
+        if (!item || !version) return null;
+        const asset = version.mediaAssetIds
+          .map((assetId) => analyticsMedia.asset(assetId))
+          .find(Boolean);
+        const transcript = asset ? analyticsMedia.transcriptForAsset(asset.id) : null;
+        return {
+          projectId: publication.projectId,
+          publicationId: publication.id,
+          contentVersionId: version.id,
+          platform: publication.platform,
+          niche: memoryStore.projects.byId(publication.projectId)?.positioning ?? null,
+          contentType: item.target,
+          title: version.title,
+          hook: version.hook,
+          body: version.body,
+          durationMs: asset?.durationMs ?? null,
+          fps: asset?.fps ?? null,
+          width: asset?.width ?? null,
+          height: asset?.height ?? null,
+          transcriptSegments: transcript?.segments ?? [],
+        };
+      },
+    },
+    clock,
+  }),
+);
+registry.register(
+  createRebuildPatternsHandler({
+    metrics: analyticsMetrics,
+    features: analyticsFeatures,
+    external: analyticsExternal,
+    patterns: analyticsPatterns,
+    learnings: createLearningsStore(handle, () => clock.nowMs()),
+    clock,
+  }),
+);
 registry.register(
   createPublishContentHandler({
     publications,

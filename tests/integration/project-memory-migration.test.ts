@@ -124,19 +124,20 @@ describe('migration ascendante de la mémoire des projets', () => {
     seedStepOne(handle);
 
     const second = applyMigrations(handle);
-    // Neuf migrations s'appliquent sur la base peuplée : `0001` (mémoire des
+    // Dix migrations s'appliquent sur la base peuplée : `0001` (mémoire des
     // projets), `0002` (conversation et fiche maître) puis `0003` (contenus
     // versionnés, veille et observabilité), `0004` (publication manuelle),
     // `0005` (audio, transcriptions et pièces jointes de message), `0006` (le
     // schéma de la veille et le rendu vidéo vertical) et `0007` (plafonds de
     // dépense et mesures de l'étape 8), `0008` (calendrier de l'étape 9), puis
-    // `0009` (colonnes de collecte, classement et vérification de l'étape 10).
+    // `0009` (colonnes de collecte, classement et vérification de l'étape 10),
+    // puis `0010` (snapshots multi-instants et patterns de l'étape 11).
     // La deuxième reconstruit `project_facts`
     // pour y ajouter la clé étrangère vers `messages` : c'est exactement le genre
     // de migration qui casse une base utilisateur si elle n'est pas testée sur
     // des données réelles.
-    expect(second.applied).toBe(9);
-    expect(appliedMigrationCount(handle)).toBe(10);
+    expect(second.applied).toBe(10);
+    expect(appliedMigrationCount(handle)).toBe(11);
 
     const rows = handle.sqlite
       .prepare(
@@ -274,7 +275,9 @@ describe('migration ascendante de la mémoire des projets', () => {
         2_000,
       );
 
-    expect(applyMigrations(handle).applied).toBe(1);
+    // La base arrêtée à l'étape 9 reçoit la veille de l'étape 10 puis les
+    // analytics de l'étape 11, sans perdre les lignes existantes.
+    expect(applyMigrations(handle).applied).toBe(2);
     const source = handle.sqlite
       .prepare('select name, categories_json from news_sources where id = ?')
       .get('source-historique') as { name: string; categories_json: string | null };

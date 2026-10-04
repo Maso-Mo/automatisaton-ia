@@ -843,6 +843,62 @@ export interface NewsSummaryView {
   items: NewsItemView[];
 }
 
+export interface MetricSnapshotView {
+  id: string;
+  publication_id: string;
+  project_id: string;
+  platform: string;
+  captured_at: number;
+  captured_date: string;
+  source: 'api' | 'manual' | 'estimated';
+  views: number | null;
+  impressions: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  saves: number | null;
+  relative_performance_x100: number | null;
+  percentile_x100: number | null;
+  view_velocity_x100: number | null;
+  classification?: 'UNDERPERFORMING' | 'NORMAL' | 'STRONG' | 'BREAKOUT' | 'VIRAL';
+  reason?: string;
+}
+
+export interface PerformancePatternView {
+  id: string;
+  project_id: string;
+  platform: string;
+  niche: string | null;
+  content_type: string | null;
+  dimension: string;
+  value: string;
+  observed_effect: string | null;
+  sample_size: number;
+  positive_sample_size: number;
+  baseline_sample_size: number;
+  confidence_x100: number;
+  status: 'EXPERIMENTAL' | 'LIKELY' | 'SUPPORTED' | 'REJECTED';
+  evidence_json: string | null;
+}
+
+export interface ExternalContentExampleView {
+  id: string;
+  project_id: string;
+  platform: string;
+  url: string;
+  creator_name: string | null;
+  title: string;
+  topic: string | null;
+  views: number | null;
+  likes: number | null;
+  followers: number | null;
+  duration_ms: number | null;
+  provenance: string;
+  confidence_x100: number;
+  included: boolean;
+  extracted_features_json: string | null;
+}
+
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
@@ -1255,6 +1311,74 @@ export const api = {
     postJson<{ proposal: CalendarProposalView; item: NewsItemView }>(
       `/news/${encodeURIComponent(id)}/calendar-proposal`,
       body,
+    ),
+
+  // --- Analytics et apprentissage (étape 11) -----------------------------
+  analytics: (projectId: string) =>
+    getJson<{
+      snapshots: MetricSnapshotView[];
+      contents: MetricSnapshotView[];
+      top: MetricSnapshotView[];
+      weak: MetricSnapshotView[];
+      byPlatform: Array<{ platform: string; publications: number; views: number }>;
+    }>(`/analytics${queryString({ projectId })}`),
+  addMetricSnapshot: (body: {
+    publicationId: string;
+    views?: number | null;
+    impressions?: number | null;
+    likes?: number | null;
+    comments?: number | null;
+    shares?: number | null;
+    saves?: number | null;
+    followersAtPublish?: number | null;
+    provenance?: string;
+  }) => postJson<{ snapshot: MetricSnapshotView }>('/analytics/metrics', body),
+  analyzePerformance: (projectId: string, publicationId?: string) =>
+    postJson<{ analyzeJobId: string; featureJobId: string | null }>('/analytics/analyze', {
+      projectId,
+      publicationId,
+    }),
+  rebuildPatterns: (projectId: string) =>
+    postJson<{ jobId: string }>('/analytics/patterns/rebuild', { projectId }),
+  analyticsPatterns: (projectId: string) =>
+    getJson<{ patterns: PerformancePatternView[]; learnings: unknown[] }>(
+      `/analytics/patterns${queryString({ projectId })}`,
+    ),
+  rejectPattern: (id: string) =>
+    postJson<{ pattern: PerformancePatternView }>(
+      `/analytics/patterns/${encodeURIComponent(id)}/reject`,
+      {},
+    ),
+  performanceAdvice: (projectId: string, platform: string, contentType?: string) =>
+    getJson<{
+      recommendations: Array<{
+        recommendation: string;
+        reason: string;
+        confidenceX100: number;
+        evidenceIds: string[];
+      }>;
+    }>(`/analytics/advice${queryString({ projectId, platform, contentType })}`),
+  externalExamples: (projectId: string) =>
+    getJson<{ examples: ExternalContentExampleView[] }>(
+      `/analytics/external${queryString({ projectId })}`,
+    ),
+  addExternalExample: (body: {
+    projectId: string;
+    platform: string;
+    url: string;
+    title: string;
+    topic?: string | null;
+    views?: number | null;
+    likes?: number | null;
+    followers?: number | null;
+    durationMs?: number | null;
+    provenance?: string;
+  }) =>
+    postJson<{ example: ExternalContentExampleView; jobId: string }>('/analytics/external', body),
+  setExternalIncluded: (id: string, projectId: string, included: boolean) =>
+    patchJson<{ example: ExternalContentExampleView }>(
+      `/analytics/external/${encodeURIComponent(id)}`,
+      { projectId, included },
     ),
 };
 

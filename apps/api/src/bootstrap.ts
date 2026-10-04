@@ -3,9 +3,14 @@ import {
   applyMigrations,
   countJobsByStatus,
   createConversationStore,
+  createContentFeatureStore,
   createEditorialStore,
+  createExternalContentStore,
+  createLearningsStore,
   createMediaStore,
+  createMetricsStore,
   createNewsStore,
+  createPerformancePatternStore,
   createProjectMemoryStore,
   createPublishingStore,
   createSchedulingStore,
@@ -25,7 +30,7 @@ import {
   type DatabaseHandle,
   type JobRow,
 } from '@aia/database';
-import { createBudgetPort, type BudgetPort } from '@aia/analytics';
+import { PerformanceAdvisor, createBudgetPort, type BudgetPort } from '@aia/analytics';
 import {
   describeConfig,
   ensureLocalDirectories,
@@ -38,6 +43,10 @@ import { createLlmCallRecorder, loadActivePrompt, syncPrompts, readGitCommit } f
 import {
   createJobRegistry,
   collectNewsSpec,
+  collectMetricsSpec,
+  analyzePerformanceSpec,
+  extractContentFeaturesSpec,
+  rebuildPatternsSpec,
   generateContentSpec,
   publishContentSpec,
   renderVideoSpec,
@@ -99,6 +108,11 @@ export interface ApiContext {
   publishing: ReturnType<typeof createPublishingStore>;
   scheduling: ReturnType<typeof createSchedulingStore>;
   news: ReturnType<typeof createNewsStore>;
+  metrics: ReturnType<typeof createMetricsStore>;
+  patterns: ReturnType<typeof createPerformancePatternStore>;
+  learnings: ReturnType<typeof createLearningsStore>;
+  externalContent: ReturnType<typeof createExternalContentStore>;
+  contentFeatures: ReturnType<typeof createContentFeatureStore>;
   media: ReturnType<typeof createMediaStore>;
   /**
    * Étape 7 : import des vidéos, proposition du plan, suivi du rendu. Le rendu
@@ -322,6 +336,10 @@ export function buildApi(
     registry.registerSpec(publishContentSpec);
     // Étape 10 : la collecte est exécutée par le worker, jamais dans la requête.
     registry.registerSpec(collectNewsSpec);
+    registry.registerSpec(collectMetricsSpec);
+    registry.registerSpec(analyzePerformanceSpec);
+    registry.registerSpec(extractContentFeaturesSpec);
+    registry.registerSpec(rebuildPatternsSpec);
     return new SqliteQueue({
       db: handle,
       registry,
@@ -351,6 +369,11 @@ export function buildApi(
   const publishing = createPublishingStore(handle, () => clock.nowMs());
   const scheduling = createSchedulingStore(handle, () => clock.nowMs());
   const news = createNewsStore(handle, () => clock.nowMs());
+  const metrics = createMetricsStore(handle, () => clock.nowMs());
+  const patterns = createPerformancePatternStore(handle, () => clock.nowMs());
+  const learnings = createLearningsStore(handle, () => clock.nowMs());
+  const externalContent = createExternalContentStore(handle, () => clock.nowMs());
+  const contentFeatures = createContentFeatureStore(handle, () => clock.nowMs());
   const media = createMediaStore(handle, () => clock.nowMs());
   const renders = createVideoRenderStore(handle, () => clock.nowMs());
   const mediaStorage = new LocalStorageAdapter(config.paths.mediaRoot);
@@ -390,6 +413,27 @@ export function buildApi(
     // Le bundle est construit **à la demande** : un prompt absent ne doit pas
     // empêcher l'API de démarrer, et le repli calculé en code existe pour ça.
     planner: () => overrides.videoPlanner ?? editorialAgents.mediaPlanner?.(),
+    performanceGuidance: (projectId, target) => {
+      const advisor = new PerformanceAdvisor();
+      const recommendations = advisor.advise({
+        platform: target.split('_')[0] ?? target,
+        contentType: target,
+        patterns: patterns.listByProject(projectId).map((row) => ({
+          id: row.id,
+          platform: row.platform,
+          niche: row.niche,
+          contentType: row.content_type,
+          feature: row.value,
+          dimension: row.dimension,
+          observedEffectPercent: row.delta_percent,
+          confidenceX100: row.confidence_x100,
+          sampleSize: row.sample_size,
+          status: row.status as 'EXPERIMENTAL' | 'LIKELY' | 'SUPPORTED' | 'REJECTED',
+        })),
+        limit: 4,
+      });
+      return advisor.guidance(recommendations, 4);
+    },
     queue: overrides.videoQueue ?? defaultProducerQueue,
     logger,
     clock,
@@ -411,6 +455,11 @@ export function buildApi(
     publishing,
     scheduling,
     news,
+    metrics,
+    patterns,
+    learnings,
+    externalContent,
+    contentFeatures,
     media,
     video,
     renders,

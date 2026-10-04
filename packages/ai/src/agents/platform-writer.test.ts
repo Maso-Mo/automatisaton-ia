@@ -139,6 +139,16 @@ function codeOf(run: () => unknown): string | undefined {
 }
 
 describe('buildPlatformWriterPrompt — un appel, toutes les plateformes', () => {
+  it('injecte au plus quatre recommandations comme associations non obligatoires', () => {
+    const prompt = buildPlatformWriterPrompt(
+      input({ performanceGuidance: ['hook result-first', 'phrases courtes', 'CTA question'] }),
+      sections(['linkedin_post']),
+    );
+    expect(prompt).toContain('PERFORMANCE GUIDANCE');
+    expect(prompt).toContain('hook result-first');
+    expect(prompt).toContain('sans les traiter comme des obligations ni comme des causalités');
+  });
+
   it('envoie le contexte projet une seule fois, et une section par cible demandée', () => {
     const prompt = buildPlatformWriterPrompt(input(), sections(['linkedin_post']));
 

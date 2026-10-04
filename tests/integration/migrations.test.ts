@@ -10,6 +10,7 @@ import {
   STEP_SIX_TABLE_NAMES,
   STEP_EIGHT_TABLE_NAMES,
   STEP_NINE_TABLE_NAMES,
+  STEP_ELEVEN_TABLE_NAMES,
   appliedMigrationCount,
   applyMigrations,
   isMigrated,
@@ -56,6 +57,8 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
       // Étape 9 : intention calendrier et propositions, séparées de l'état
       // distant (`publications`) et de l'exécution (`jobs`).
       ...STEP_NINE_TABLE_NAMES,
+      // Étape 11 : exemples publics minimaux et caractéristiques abstraites.
+      ...STEP_ELEVEN_TABLE_NAMES,
     ]);
     expect(STEP_THREE_TABLE_NAMES).toEqual([
       'conversations',
@@ -96,6 +99,7 @@ describe('migrations et contraintes de la base (docs/03 §15)', () => {
     // de données existe vraiment — c'est le seul écart assumé du plan (docs/10 §4.7).
     expect(STEP_SEVEN_TABLE_NAMES).toEqual(['news_sources', 'news_items']);
     expect(STEP_NINE_TABLE_NAMES).toEqual(['calendar_slots', 'calendar_change_proposals']);
+    expect(STEP_ELEVEN_TABLE_NAMES).toEqual(['external_content_examples', 'content_feature_sets']);
     expect(appliedMigrationCount(context.handle)).toBeGreaterThan(0);
   });
 
