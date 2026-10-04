@@ -33,6 +33,15 @@ data/
 *.db-shm
 
 # ---------------------------------------------------------------------------
+# Sauvegardes locales et exports utilisateur (étape 12)
+#
+# Une sauvegarde contient une copie de la base et des médias : elle ne doit
+# jamais entrer dans le dépôt (secrets chiffrés, données personnelles).
+# ---------------------------------------------------------------------------
+backups/
+exports/
+
+# ---------------------------------------------------------------------------
 # Secrets et configuration locale
 # ---------------------------------------------------------------------------
 .env

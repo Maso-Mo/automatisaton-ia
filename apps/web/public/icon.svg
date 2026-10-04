@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Automatisation IA">
+  <!-- Icône volontairement textuelle : aucune dépendance graphique, aucun binaire au dépôt. -->
+  <rect width="512" height="512" rx="96" fill="#0f172a" />
+  <circle cx="150" cy="256" r="34" fill="#34d399" />
+  <circle cx="362" cy="166" r="26" fill="#60a5fa" />
+  <circle cx="362" cy="346" r="26" fill="#f59e0b" />
+  <g stroke="#e2e8f0" stroke-width="14" stroke-linecap="round">
+    <path d="M178 240 L336 172" />
+    <path d="M178 272 L336 340" />
+  </g>
+</svg>

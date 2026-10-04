@@ -30,3 +30,22 @@ createRoot(container).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+/**
+ * Service worker (étape 12 §21) : **uniquement en production**.
+ *
+ * En développement, un cache de coquille servirait un `index.html` périmé et
+ * ferait croire à un bug de l'application alors qu'il n'y en a pas. Hors ligne,
+ * l'application s'ouvre ; elle reste inutilisable sans API — c'est voulu, les
+ * données ne sont jamais inventées côté navigateur.
+ *
+ * Un échec d'enregistrement n'est pas une panne : l'application fonctionne sans
+ * (mode privé, navigateur ancien, service worker désactivé). On ne le signale
+ * donc pas à l'écran — ce serait inquiéter pour rien — et on n'écrit pas dans la
+ * console, qui n'est pas un canal d'alerte du produit.
+ */
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}

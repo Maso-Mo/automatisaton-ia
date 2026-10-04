@@ -2,6 +2,7 @@ import pino, { type DestinationStream, type Logger, type LoggerOptions } from 'p
 import type { LogLevel } from '@aia/shared';
 import { redact, redactString } from '@aia/config';
 import { currentLogContext } from './context';
+import { createRotatingFileDestination, type RotatingFileOptions } from './rotate';
 
 export type AppLogger = Logger;
 
@@ -13,6 +14,12 @@ export interface CreateLoggerOptions {
   name?: string;
   /** Flux de destination (les tests y capturent les lignes). */
   destination?: DestinationStream;
+  /**
+   * Journal fichier **avec rotation** (étape 12 §16). Quand il est fourni, le
+   * fichier remplace la sortie standard : le format reste le même, seule la
+   * destination change. Sans lui, rien ne change par rapport aux étapes 1 à 11.
+   */
+  file?: RotatingFileOptions;
 }
 
 /**
@@ -51,6 +58,12 @@ export function createLogger(options: CreateLoggerOptions = {}): AppLogger {
   if (options.destination) {
     // `transport` et un flux explicite s'excluent : le flux gagne (tests, fichiers).
     return pino(pinoOptions, options.destination);
+  }
+
+  if (options.file) {
+    // Journal fichier tournant : JSON structuré (jamais `pretty`), sinon la
+    // rotation se ferait sur des couleurs ANSI sans intérêt pour un fichier.
+    return pino(pinoOptions, createRotatingFileDestination(options.file));
   }
 
   if (options.pretty) {

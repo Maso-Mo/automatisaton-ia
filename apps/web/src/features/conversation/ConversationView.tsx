@@ -77,9 +77,7 @@ export function ConversationView() {
   useEffect(() => {
     if (conversationId === null) return;
     setLiveMessages([]);
-    const source = new EventSource(
-      `/api/events/conversations/${encodeURIComponent(conversationId)}`,
-    );
+    const source = new EventSource(api.eventsConversationUrl(conversationId));
 
     source.addEventListener('snapshot', (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as {

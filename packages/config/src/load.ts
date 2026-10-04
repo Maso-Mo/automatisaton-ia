@@ -11,6 +11,8 @@ export interface Paths {
   databaseFile: string;
   mediaRoot: string;
   promptsDir: string;
+  /** Dossier des sauvegardes locales (base et médias, docs/11 D5). */
+  backupDir: string;
 }
 
 /**
@@ -107,6 +109,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     databaseFile: databaseFileFrom(env.DATABASE_URL, root),
     mediaRoot: isAbsolute(env.MEDIA_ROOT) ? env.MEDIA_ROOT : resolve(root, env.MEDIA_ROOT),
     promptsDir: isAbsolute(env.PROMPTS_DIR) ? env.PROMPTS_DIR : resolve(root, env.PROMPTS_DIR),
+    backupDir: isAbsolute(env.BACKUP_DIR) ? env.BACKUP_DIR : resolve(root, env.BACKUP_DIR),
   };
 
   const secretPresence = Object.fromEntries(
@@ -124,12 +127,31 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
   };
 }
 
-/** Crée les dossiers locaux nécessaires (base, médias). Idempotent. */
+/**
+ * Crée les dossiers locaux nécessaires (base, médias, sauvegardes, journaux).
+ * Idempotent.
+ *
+ * Les sauvegardes en font partie : `GET /ready` refuse de se déclarer prêt si un
+ * dossier d'écriture manque (étape 12 §14), et « l'application démarre mais la
+ * sauvegarde n'est pas possible » est exactement l'état qu'on ne veut pas
+ * découvrir le jour où l'on en a besoin.
+ */
 export function ensureLocalDirectories(config: Config): void {
   if (config.paths.databaseFile !== ':memory:') {
     mkdirSync(dirname(config.paths.databaseFile), { recursive: true });
   }
   mkdirSync(config.paths.mediaRoot, { recursive: true });
+  mkdirSync(config.paths.backupDir, { recursive: true });
+  if (config.env.LOG_DIR) {
+    mkdirSync(
+      isAbsolute(config.env.LOG_DIR)
+        ? config.env.LOG_DIR
+        : resolve(config.paths.root, config.env.LOG_DIR),
+      {
+        recursive: true,
+      },
+    );
+  }
 }
 
 /**

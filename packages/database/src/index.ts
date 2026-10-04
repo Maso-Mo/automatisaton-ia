@@ -6,6 +6,7 @@
  * (docs/02 §4). C'est ce qui rend la migration vers PostgreSQL mécanique.
  */
 
+export * from './backup';
 export * from './client';
 export * from './migrations';
 export * from './repositories/analytics';

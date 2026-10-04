@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type CheckStatus, type SystemHealth } from './api/client';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { JobsSection } from './components/JobsSection';
 import { Metrics } from './components/Metrics';
 import { ConversationView } from './features/conversation/ConversationView';
@@ -14,7 +15,7 @@ import { NewsView } from './features/news/NewsView';
 import { AnalyticsView } from './features/analytics/AnalyticsView';
 
 /**
- * Application de l'étape 11 : dix vues, sans routeur (un routeur ne se justifie
+ * Application de l'étape 12 : dix vues, sans routeur (un routeur ne se justifie
  * pas encore pour cette navigation compacte, docs/10 §1.3).
  *
  * - **Plan éditorial** (étape 5) : produire des sujets, retenir un angle, cocher
@@ -31,7 +32,9 @@ import { AnalyticsView } from './features/analytics/AnalyticsView';
  * - **Conversation** (étape 3) : on discute, la mémoire se construit, la fiche
  *   maître se relit et se valide — c'est elle qui alimente le plan.
  * - **Projets** (étape 2) : la mémoire structurée — projets, faits, contexte.
- * - **Diagnostic** (étape 1) : *le socle est-il en état ?*
+ * - **Diagnostic** (étapes 1 et 12) : *le socle est-il en état ?* — puis, en
+ *   dessous, le panneau d'**exploitation** (disque, sauvegardes, jobs en échec,
+ *   services configurés, accès distant par jeton).
  *
  * Le calendrier réutilise le pipeline de publication idempotent de l'étape 8.
  */
@@ -80,8 +83,8 @@ export function App() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Automatisation IA</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Étape 11 : mesurez les résultats réels, comparez-les à une baseline et appliquez des
-          recommandations explicables.
+          Étape 12 : installez, vérifiez, sauvegardez et restaurez — et accédez-y depuis un
+          téléphone, en réseau local ou par tunnel, sans exposer un secret.
         </p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Vues">
           {(
@@ -189,6 +192,8 @@ export function App() {
             isLoading={summary.isPending}
             isError={summary.isError}
           />
+
+          <DiagnosticsPanel />
 
           <footer className="text-xs text-slate-500">
             Interdits de l’étape 1 : pas d’authentification complète, pas de panneau de réglages,

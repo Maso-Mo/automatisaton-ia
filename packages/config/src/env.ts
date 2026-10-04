@@ -228,6 +228,41 @@ export const envSchema = z.object({
         'ENCRYPTION_KEY doit contenir 64 caractères hexadécimaux (32 octets)',
       ),
   ),
+  /**
+   * **Protection d'accès optionnelle** (docs/07 §3, étape 12 §22–25).
+   *
+   * Vide par défaut : l'application écoute sur `127.0.0.1`, l'accès est déjà
+   * physique. Dès que l'API est exposée au réseau local ou par un tunnel,
+   * renseigner un jeton rend **obligatoire** l'en-tête `Authorization: Bearer`
+   * (ou `x-auth-token`) sur toutes les routes sauf `/health` et `/ready`.
+   * Le Wi-Fi n'est pas une authentification : c'est le sens de cette variable.
+   * Elle n'est jamais journalisée (elle est déclarée secrète, §4.3).
+   */
+  AUTH_TOKEN: optionalText(),
+
+  // --- Sauvegardes et journaux (étape 12) ---------------------------------
+  /**
+   * Dossier des sauvegardes locales (docs/11 — décision D5 : base et médias
+   * sauvegardés **séparément**). Résolu depuis la racine du dépôt : une
+   * sauvegarde doit être trouvable sans deviner le répertoire courant.
+   */
+  BACKUP_DIR: z.string().default('backups'),
+  /**
+   * Dossier des journaux fichier. **Vide par défaut** : en développement, la
+   * sortie standard suffit (elle est capturée par le terminal). Renseigné, il
+   * active un fichier JSON journalisé **avec rotation** par taille (docs/08 §5).
+   * Le format reste le même, seule la destination change.
+   */
+  LOG_DIR: optionalText(500),
+  /** Taille au-delà de laquelle le journal fichier est tourné (octets). */
+  LOG_MAX_BYTES: integer({
+    default: 5_000_000,
+    min: 10_000,
+    max: 500_000_000,
+    label: 'LOG_MAX_BYTES',
+  }),
+  /** Nombre de fichiers de journal conservés (rotation, plus le courant). */
+  LOG_MAX_FILES: integer({ default: 5, min: 1, max: 50, label: 'LOG_MAX_FILES' }),
 
   // --- File de jobs (docs/08 §2.3)
   QUEUE_CONCURRENCY: integer({ default: 3, min: 1, max: 10, label: 'QUEUE_CONCURRENCY' }),
@@ -302,6 +337,7 @@ export const ENV_KEYS = Object.keys(envSchema.shape) as (keyof Env)[];
 export const SECRET_ENV_KEYS = [
   'SESSION_SECRET',
   'ENCRYPTION_KEY',
+  'AUTH_TOKEN',
   'DEEPSEEK_API_KEY',
   'OPENROUTER_API_KEY',
   'OPENAI_API_KEY',

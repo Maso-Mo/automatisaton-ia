@@ -171,6 +171,18 @@ export function buildApi(
       level: config.env.LOG_LEVEL,
       pretty: config.env.LOG_PRETTY && config.env.APP_ENV !== 'production',
       name: 'api',
+      ...(config.env.LOG_DIR
+        ? {
+            file: {
+              dir: isAbsolute(config.env.LOG_DIR)
+                ? config.env.LOG_DIR
+                : resolve(config.paths.root, config.env.LOG_DIR),
+              file: 'api.log',
+              maxBytes: config.env.LOG_MAX_BYTES,
+              maxFiles: config.env.LOG_MAX_FILES,
+            },
+          }
+        : {}),
     });
 
   const clock = overrides.clock ?? createSystemClock();

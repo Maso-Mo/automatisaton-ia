@@ -9,6 +9,7 @@ import { spawnCommand, type CommandResult, type CommandRunner } from './exec';
 export * from './exec';
 export * from './ffmpeg';
 export * from './hash';
+export * from './manifest';
 export * from './retention';
 export * from './subtitles';
 export * from './video';

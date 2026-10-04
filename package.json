@@ -9,6 +9,12 @@
   },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
+    "app:start": "pnpm preflight && pnpm -r --parallel dev",
+    "setup": "tsx scripts/setup.ts",
+    "preflight": "tsx scripts/preflight.ts",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts",
+    "export": "tsx scripts/export.ts",
     "dev:api": "pnpm --filter @aia/api dev",
     "dev:worker": "pnpm --filter @aia/worker dev",
     "dev:web": "pnpm --filter @aia/web dev",

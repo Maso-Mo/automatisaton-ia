@@ -39,9 +39,13 @@ export function buildServer(context: ApiContext): FastifyInstance {
   app.get('/', async () => ({
     name: 'automatisation-ia',
     version: '0.1.0',
-    step: 'étape 11 — analytics, apprentissage et Viral Pattern Engine',
+    step: 'étape 12 — fiabilisation finale et exploitation locale',
     endpoints: [
+      'GET /health',
+      'GET /ready',
       'GET /system/health',
+      'GET /system/diagnostics',
+      'GET /system/jobs-summary',
       'GET /jobs',
       'GET /jobs/:id',
       'GET /events/jobs/:id',

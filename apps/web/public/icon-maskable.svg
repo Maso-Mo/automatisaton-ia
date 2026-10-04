@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Automatisation IA">
+  <!-- Version « maskable » : le dessin tient dans le cercle de sécurité (80 %). -->
+  <rect width="512" height="512" fill="#0f172a" />
+  <circle cx="186" cy="256" r="28" fill="#34d399" />
+  <circle cx="340" cy="186" r="22" fill="#60a5fa" />
+  <circle cx="340" cy="326" r="22" fill="#f59e0b" />
+  <g stroke="#e2e8f0" stroke-width="12" stroke-linecap="round">
+    <path d="M209 243 L319 191" />
+    <path d="M209 269 L319 321" />
+  </g>
+</svg>

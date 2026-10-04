@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { AppError, ValidationError, serializeError, toAppError } from '@aia/shared';
 import { CATEGORY_TO_STATUS } from '../http-status';
+import { redactToken } from '../redact';
 
 /** Corps d'erreur envoyé au client : jamais de trace de pile (docs/08 §6.3). */
 export function errorBody(error: unknown): { error: Record<string, unknown> } {
@@ -34,7 +35,7 @@ function tooLargeBody(error: unknown): boolean {
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     if (tooLargeBody(error)) {
-      request.log.warn({ url: request.url }, 'corps de requête au-delà de la limite');
+      request.log.warn({ url: redactToken(request.url) }, 'corps de requête au-delà de la limite');
       reply.status(413).send(
         errorBody(
           new ValidationError('Le fichier envoyé dépasse la taille maximale.', {
@@ -48,10 +49,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
     const appError = toAppError(error);
 
     if (appError.category === 'internal') {
-      request.log.error({ err: appError, url: request.url }, 'erreur interne');
+      request.log.error({ err: appError, url: redactToken(request.url) }, 'erreur interne');
     } else {
       request.log.warn(
-        { category: appError.category, code: appError.code, url: request.url },
+        { category: appError.category, code: appError.code, url: redactToken(request.url) },
         appError.message,
       );
     }
@@ -61,7 +62,12 @@ export function registerErrorHandler(app: FastifyInstance): void {
   });
 
   app.setNotFoundHandler((request, reply) => {
-    const error = new AppError(`Route inconnue : ${request.method} ${request.url}`, 'not_found');
+    // L'URL est nommée dans le message — donc masquée : une route inconnue
+    // peut être une URL d'image ou de flux qui portait un jeton de lecture.
+    const error = new AppError(
+      `Route inconnue : ${request.method} ${redactToken(request.url)}`,
+      'not_found',
+    );
     reply.status(404).send(errorBody(error));
   });
 }

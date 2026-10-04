@@ -57,6 +57,15 @@
     anti-biais, exemples externes minimaux, confidence/learnings, PerformanceAdvisor,
     guidance writer/media, propositions calendrier humaines et interfaces Analytics /
     Viral Research.
+23. **`22-mise-en-oeuvre-etape-12.md`** — fiabilisation finale et exploitation locale :
+    installation et préflight, sauvegarde `VACUUM INTO` + manifeste de médias, restauration
+    vérifiée et réversible, export sans colonne sensible, résilience aux dépendances
+    optionnelles, sondes `/health` et `/ready`, panneau d'exploitation, journaux à rotation
+    bornée, accès LAN/mobile et distant par jeton, PWA — et l'écart assumé avec le §4.12 du
+    plan (PostgreSQL et conteneurs non livrés).
+24. **`guide-utilisation.md`** — le mode d'emploi : installer, configurer, démarrer,
+    sauvegarder, restaurer, exporter, consulter depuis un téléphone (LAN puis Tailscale),
+    installer l'application, lire les journaux et le diagnostic, dépannage.
 
 
 ## Règles de rédaction

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PublicJob } from '../../api/client';
+import { api, type PublicJob } from '../../api/client';
 import { applyJobProgress, jobStepLabel, type JobProgress, type JobStreamMessage } from './state';
 
 /**
@@ -32,7 +32,7 @@ export function useJobStream(
     }
     setProgress(null);
     settled.current = null;
-    const source = new EventSource(`/api/events/jobs/${encodeURIComponent(jobId)}`);
+    const source = new EventSource(api.eventsJobUrl(jobId));
 
     const update = (message: JobStreamMessage): void => {
       setProgress((current) => applyJobProgress(current ?? { ...EMPTY_PROGRESS, jobId }, message));

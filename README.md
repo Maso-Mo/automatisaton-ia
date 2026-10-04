@@ -5,7 +5,7 @@
 > **La documentation de conception est la source de vérité** : le produit final, son architecture,
 > son modèle de données, ses pipelines, sa stratégie de tests et son plan en 12 étapes.
 >
-> **Les étapes 1 à 11 sont implémentées** :
+> **Les étapes 1 à 12 sont implémentées** :
 > - **étape 1** (fondations exécutables) : monorepo pnpm, API Fastify, worker, base SQLite migrée,
 >   file de jobs, suivi des coûts, journalisation corrélée, écran de diagnostic ;
 > - **étape 2** (mémoire des projets) : projets, faits typés avec états de vérification, sélection
@@ -23,6 +23,11 @@
 >   budgets, calendrier éditorial, puis veille vérifiable et adaptation supervisée ;
 > - **étape 11** : snapshots de métriques, normalisation relative, Viral Pattern Engine avec
 >   baseline anti-biais, learnings persistants, recommandations explicables et Viral Research.
+> - **étape 12** (fiabilisation finale et exploitation locale) : installation guidée
+>   (`pnpm setup`), préflight bloquant/optionnel, sauvegarde vérifiable (`VACUUM INTO` + manifeste
+>   SHA-256 des médias), restauration avec `--yes` obligatoire, export de données sans colonne
+>   sensible, sondes `/health` et `/ready`, panneau d'exploitation, journaux à rotation bornée,
+>   accès LAN/mobile et distant par jeton (`AUTH_TOKEN`), interface installable (PWA).
 >
 > La publication API n'est utilisée que lorsqu'une capacité officielle est réellement acquise ;
 > sinon le paquet manuel reste disponible. Toute publication et tout déplacement de calendrier
@@ -38,7 +43,9 @@
 > **[docs/13-mise-en-oeuvre-etape-3.md](docs/13-mise-en-oeuvre-etape-3.md)** et
 > **[docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md)** et
 > **[docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md)** et
-> **[docs/21-mise-en-oeuvre-etape-11.md](docs/21-mise-en-oeuvre-etape-11.md)**.
+> **[docs/21-mise-en-oeuvre-etape-11.md](docs/21-mise-en-oeuvre-etape-11.md)** et
+> **[docs/22-mise-en-oeuvre-etape-12.md](docs/22-mise-en-oeuvre-etape-12.md)**.
+> Guide d'utilisation : **[docs/guide-utilisation.md](docs/guide-utilisation.md)**.
 
 ---
 
@@ -104,24 +111,25 @@ techniquement.
 | [docs/14-mise-en-oeuvre-etape-4.md](docs/14-mise-en-oeuvre-etape-4.md) | **Compte rendu d'exécution de l'étape 4** : génération éditoriale — décisions (M1 à M20), ce qui n'a pas été construit, tests, points ouverts |
 | [docs/15-mise-en-oeuvre-etape-5.md](docs/15-mise-en-oeuvre-etape-5.md) | **Compte rendu d'exécution de l'étape 5** : qualité, dashboard et publication manuelle — décisions, limites vérifiées, tests et périmètre |
 | [docs/21-mise-en-oeuvre-etape-11.md](docs/21-mise-en-oeuvre-etape-11.md) | **Compte rendu d'exécution de l'étape 11** : analytics relatifs, Viral Pattern Engine, anti-biais, learnings et recommandations explicables |
+| [docs/22-mise-en-oeuvre-etape-12.md](docs/22-mise-en-oeuvre-etape-12.md) | **Compte rendu d'exécution de l'étape 12** : installation et préflight, sauvegarde/restauration vérifiables, export, sondes et diagnostic, journaux à rotation, accès LAN/distant par jeton, PWA — et ce qui n'a pas été fait (PostgreSQL, Docker) |
+| [docs/guide-utilisation.md](docs/guide-utilisation.md) | **Guide d'utilisation** : installer, configurer, démarrer, sauvegarder, restaurer, exporter, accès téléphone/Tailscale, PWA, dépannage |
 
 ---
 
-## 3bis. Démarrage rapide (étapes 1 à 11)
+## 3bis. Démarrage rapide (étapes 1 à 12)
 
 ```bash
 pnpm install                  # dépendances (better-sqlite3 compilé localement)
-cp .env.example .env          # puis renseigner les deux clés obligatoires :
-openssl rand -hex 32          #   SESSION_SECRET
-openssl rand -hex 32          #   ENCRYPTION_KEY
-# puis DEEPSEEK_API_KEY=sk-... pour que la conversation fonctionne réellement
-
-pnpm check:env                # état de l'environnement (bloquant ou dégradé)
-pnpm db:migrate               # crée data/app.db et les 45 tables attendues
-pnpm dev                      # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
+pnpm setup                    # .env (clés générées) + dossiers + migrations
+pnpm preflight                # « puis-je démarrer ? » — bloque ou avertit, explicitement
+pnpm app:start                # API (127.0.0.1:4317) + worker + web (127.0.0.1:5173)
 
 pnpm job:noop -- --wait       # sonde de bout en bout : statut, événements, coût calculé
 pnpm verify                   # types, lint, tests, migrations, frontières, canari, environnement
+
+pnpm backup                   # sauvegarde de la base + manifeste des médias (--media pour les fichiers)
+pnpm restore                  # prévisualisation d'une restauration (--yes pour appliquer)
+pnpm export                   # export JSON de vos données, sans aucune colonne sensible
 ```
 
 L'interface (`http://127.0.0.1:5173`) a dix onglets :
@@ -135,12 +143,16 @@ L'interface (`http://127.0.0.1:5173`) a dix onglets :
 - **Aujourd'hui / Calendrier** : échéances, planification et propositions humaines ;
 - **News / Veille** : collecte vérifiable, score expliqué et suggestions ;
 - **Analytics** : snapshots, performances relatives, patterns et Viral Research ;
-- **Diagnostic** : base migrée, worker actif, clé IA présente, budget du jour.
+- **Diagnostic** : base migrée, worker actif, clé IA présente, budget du jour, puis le panneau
+  **Exploitation** : espace disque, dernière sauvegarde, jobs en échec, services configurés,
+  accès distant par jeton.
 
 Sans clé DeepSeek, le diagnostic et les fonctions locales démarrent, mais les appels IA réels
 échouent explicitement ; les tests et l'E2E utilisent des fournisseurs scriptés. La publication
 peut rester manuelle et ne dépend d'aucune API externe. Voir
-[docs/21](docs/21-mise-en-oeuvre-etape-11.md).
+[docs/21](docs/21-mise-en-oeuvre-etape-11.md) et
+[docs/22](docs/22-mise-en-oeuvre-etape-12.md) ; mode d'emploi complet :
+[docs/guide-utilisation.md](docs/guide-utilisation.md).
 
 Prérequis : Node ≥ 20 LTS, pnpm ≥ 10. FFmpeg/ffprobe et whisper.cpp sont optionnels pour les
 parcours texte/analytics ; leur absence est signalée « dégradé » et bloque seulement la fonction
@@ -195,7 +207,7 @@ Détail complet et justifications : [docs/02-architecture.md](docs/02-architectu
 | 9 | Calendrier et planification — **implémentée** | **V2** |
 | 10 | Veille et exploitation continue — **implémentée** | **V3** |
 | 11 | Analytics et apprentissage — **implémentée** | **V3** |
-| 12 | Consolidation et portabilité | **V3** |
+| 12 | Consolidation et exploitation locale — **implémentée** (installation, sauvegarde/restauration, sondes, diagnostic, accès LAN/distant ; PostgreSQL et conteneurs non livrés, voir [docs/22](docs/22-mise-en-oeuvre-etape-12.md) §13) | **V3** |
 
 > **Numérotation** : ce tableau suit les titres de
 > [`docs/10`](docs/10-plan-de-developpement-12-etapes.md) §2. Le lot livré ici est intitulé

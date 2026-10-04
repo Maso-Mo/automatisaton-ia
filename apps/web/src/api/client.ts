@@ -6,6 +6,23 @@
  * états, libellés) est **servi par l'API** — c'est ce qui empêche l'interface
  * d'inventer une valeur que le domaine refuse.
  */
+import { getAuthToken } from './authToken';
+
+/**
+ * Ajoute le jeton d'accès à une URL destinée à un élément du navigateur
+ * (`<img>`, `<video>`, `EventSource`) : ces appels **ne peuvent pas** porter
+ * d'en-tête `Authorization` (étape 12 §22).
+ *
+ * Le jeton n'apparaît donc que dans une URL de **lecture** — l'API ne l'accepte
+ * pas en paramètre pour une écriture, et le retire de ses journaux.
+ */
+export function withToken(path: string): string {
+  const token = getAuthToken();
+  if (token === '') return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}token=${encodeURIComponent(token)}`;
+}
+
 export type CheckStatus = 'ok' | 'warn' | 'error';
 
 export interface HealthCheck {
@@ -50,6 +67,44 @@ export interface SystemHealth {
     durationMs: number | null;
     costMicroUsd: number;
   } | null;
+}
+
+// --- Exploitation (étape 12 §14) -------------------------------------------
+
+export interface DiskUsageView {
+  path: string;
+  totalBytes: number;
+  freeBytes: number;
+  usedPercent: number;
+}
+
+export interface BackupSummaryView {
+  label: string;
+  createdAt: number;
+  sizeBytes: number;
+  migrations: number;
+  checksum: string;
+}
+
+export interface ServiceStatusView {
+  id: string;
+  label: string;
+  configured: boolean;
+  detail: string;
+  optional: boolean;
+}
+
+/**
+ * Réponse de `GET /system/diagnostics`. Elle ne contient **jamais** de valeur de
+ * secret : seulement la *présence* d'un service (`configured`).
+ */
+export interface DiagnosticsView {
+  generatedAt: number;
+  disk: DiskUsageView[];
+  lastBackup: BackupSummaryView | null;
+  backupCount: number;
+  failedJobs: number;
+  services: ServiceStatusView[];
 }
 
 export interface PublicJob {
@@ -317,11 +372,13 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const response = await fetch(`/api${path}`, {
     ...init,
     headers: {
       accept: 'application/json',
       ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(token === '' ? {} : { authorization: `Bearer ${token}` }),
       ...init.headers,
     },
   });
@@ -901,6 +958,14 @@ export interface ExternalContentExampleView {
 
 export const api = {
   health: () => getJson<SystemHealth>('/system/health'),
+  diagnostics: () => getJson<DiagnosticsView>('/system/diagnostics'),
+  /**
+   * Flux SSE : `EventSource` n'accepte pas d'en-tête personnalisé, le jeton passe
+   * donc par l'URL — uniquement pour ces lectures (étape 12 §22).
+   */
+  eventsJobUrl: (jobId: string) => withToken(`/api/events/jobs/${encodeURIComponent(jobId)}`),
+  eventsConversationUrl: (conversationId: string) =>
+    withToken(`/api/events/conversations/${encodeURIComponent(conversationId)}`),
   jobsSummary: () => getJson<JobsSummary>('/system/jobs-summary'),
   jobs: (limit = 20) => getJson<{ jobs: PublicJob[] }>(`/jobs?limit=${limit}`),
   job: (id: string) =>
@@ -1200,8 +1265,10 @@ export const api = {
    * préfixe `/api` est celui du proxy de Vite (aucune autre origine, donc aucun
    * CORS — cf. `vite.config.ts`).
    */
-  renderFileUrl: (renderId: string) => `/api/renders/${encodeURIComponent(renderId)}/file`,
-  sourceFileUrl: (assetId: string) => `/api/media/assets/${encodeURIComponent(assetId)}/file`,
+  renderFileUrl: (renderId: string) =>
+    withToken(`/api/renders/${encodeURIComponent(renderId)}/file`),
+  sourceFileUrl: (assetId: string) =>
+    withToken(`/api/media/assets/${encodeURIComponent(assetId)}/file`),
 
   // --- Calendrier éditorial (étape 9) -----------------------------------
   calendarSettings: () => getJson<CalendarSettingsView>('/calendar/settings'),

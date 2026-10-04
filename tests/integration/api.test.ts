@@ -37,8 +37,14 @@ describe('API : racine, diagnostic, jobs et flux SSE', () => {
     // Le libellé d'étape est une **affirmation produit** : il nomme ce que
     // l'application sait faire aujourd'hui. Ce test le fige pour qu'il ne
     // régresse pas et n'annonce jamais une étape inexistante.
-    expect(body.step).toBe('étape 11 — analytics, apprentissage et Viral Pattern Engine');
+    expect(body.step).toBe('étape 12 — fiabilisation finale et exploitation locale');
     expect(body.endpoints).toContain('GET /system/health');
+    // Étape 12 : les sondes de supervision et le panneau d'exploitation sont
+    // annoncés, comme tout le reste — un superviseur n'a pas à deviner une URL.
+    expect(body.endpoints).toContain('GET /health');
+    expect(body.endpoints).toContain('GET /ready');
+    expect(body.endpoints).toContain('GET /system/diagnostics');
+    expect(body.endpoints).toContain('GET /system/jobs-summary');
     // L'étape 4 ajoute le plan éditorial et la génération de contenus, l'étape 5
     // les routes de revue, l'étape 6 l'entrée vocale, l'étape 7 le montage vidéo,
     // l'étape 8 le déclenchement de publication : la racine les annonce, donc
